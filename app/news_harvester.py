@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.error
 import re
 from datetime import datetime
 import json
@@ -22,6 +23,8 @@ class NewsHarvester:
         }
         self.cache = []
         self.last_fetch = None
+        self.disabled = False
+        self.error_count = 0
 
     def _get_ssl_context(self):
         ctx = ssl.create_default_context()
@@ -34,6 +37,9 @@ class NewsHarvester:
         Fetches High Impact news for USD and EUR.
         Returns a formatted string for the AI or a list of dicts.
         """
+        if self.disabled:
+             return "News Analysis Disabled (Source Blocked)."
+             
         # Simple caching (15 mins) to avoid spamming FF
         if self.last_fetch and (datetime.now() - self.last_fetch).seconds < 900:
             return self._format_news(self.cache)
@@ -43,16 +49,34 @@ class NewsHarvester:
             with urllib.request.urlopen(req, context=self._get_ssl_context()) as response:
                 html = response.read().decode('utf-8')
             
-            with open("debug_calendar.html", "w", encoding="utf-8") as f:
-                f.write(html)
+            # Reset error count if successful
+            self.error_count = 0
+            
+            # Debug file only on success
+            # with open("debug_calendar.html", "w", encoding="utf-8") as f:
+            #     f.write(html)
                 
             self.cache = self._parse_html(html)
             self.last_fetch = datetime.now()
             return self._format_news(self.cache)
             
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                print(f"⚠️ News Feed Blocked (403). Disabling News Analysis for this session.")
+                self.disabled = True
+                return "News Disabled (Source Blocked)"
+            else:
+                 print(f"News Http Error: {e}")
+                 pass
         except Exception as e:
             print(f"News Scrape Error: {e}")
-            return "News Data Unavailable."
+            
+        self.error_count += 1
+        if self.error_count > 5:
+             print("⚠️ Too many News errors. Disabling News Module.")
+             self.disabled = True
+             
+        return "News Data Unavailable (Checking Technicals Only)."
 
     def _parse_html(self, html):
         """
@@ -134,15 +158,17 @@ class NewsHarvester:
         Checks if a High Impact event occurred in the last 15 minutes AND has an 'Actual' value.
         Returns the event dict if true, else None.
         """
+        if self.disabled: return None
+        
         # Force fresh fetch
         self.last_fetch = None 
-        # Force fresh fetch
-        self.last_fetch = None 
+        
         try:
             req = urllib.request.Request(self.url, headers=self.headers)
             with urllib.request.urlopen(req, context=self._get_ssl_context()) as response:
                 html = response.read().decode('utf-8')
             all_events = self._parse_html(html)
+            self.error_count = 0 # Reset on success
             
             # Filter for events that HAVE an 'actual' value
             finished_events = [e for e in all_events if e['actual'] != ""]
@@ -150,20 +176,20 @@ class NewsHarvester:
             if not finished_events:
                 return None
                 
-            # Ideally we check the timestamp, but parsing "Jan 22, 2026 8:30am" is tricky without a robust parser.
-            # Simplify: The latest event with an 'Actual' value is likely the one that just happened 
-            # (assuming the calendar is sorted chronologically, which it is).
-            
-            occurred_event = finished_events[-1] # Valid logical assumption for sorted list
-            
-            # TODO: Improve Timestamp Check to ensure it wasn't 4 hours ago.
-            # For now, we rely on the bot polling loop calling this frequently.
-            # If the value is there, it's "Done".
-            
+            occurred_event = finished_events[-1] 
             return occurred_event
             
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                print(f"⚠️ News Trigger Blocked (403). Disabling News Analysis.")
+                self.disabled = True
+            return None
         except Exception as e:
             print(f"Trigger Check Error: {e}")
+            self.error_count += 1
+            if self.error_count > 5:
+                print("⚠️ Trigger Check unstable. Disabling News.")
+                self.disabled = True
             return None
 
 
