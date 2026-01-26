@@ -1,0 +1,6 @@
+backend: python main.py
+frontend: cd web-dash   
+            npm run dev 
+
+
+data-link : python -m uvicorn app.api:app --reload --port 8000 

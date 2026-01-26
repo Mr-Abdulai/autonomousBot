@@ -1,0 +1,13 @@
+.env/
+venv
+frontenv/
+node_modules/
+__pycache__/
+*.log
+*.csv
+*.json
+*.html
+web-dashboard/dist/
+system_state.json
+market_history.json
+trades.json

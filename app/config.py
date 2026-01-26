@@ -1,0 +1,56 @@
+import os
+from dotenv import load_dotenv
+import MetaTrader5 as mt5
+
+# Load .env file
+load_dotenv()
+
+class Config:
+    # Trading Settings
+    SYMBOL = os.getenv("SYMBOL", "EURUSD") # Default to EURUSD
+    TIMEFRAME = mt5.TIMEFRAME_M15  # 15 Minute candles
+    RISK_PER_TRADE = 0.01          # 1% risk per trade
+    STOP_LOSS_ATR_MULTIPLIER = 1.5 # Default fallback
+    
+    # Modes
+    # If BACKTEST_MODE is True, we don't send orders to MT5, just log them.
+    BACKTEST_MODE = os.getenv("BACKTEST_MODE", "true").lower() == "true"
+    
+    # Cost Optimization
+    SMART_FILTER = os.getenv("SMART_FILTER", "true").lower() == "true"
+    MAX_OPEN_TRADES = 3 # Pyramiding Limit
+    AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
+    
+    # Credentials
+    MT5_LOGIN = os.getenv("MT5_LOGIN")
+    MT5_PASSWORD = os.getenv("MT5_PASSWORD")
+    MT5_SERVER = os.getenv("MT5_SERVER")
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+    # Project Paths
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    TRADES_FILE = os.path.join(BASE_DIR, "trades.json")
+
+    @staticmethod
+    def validate():
+        """Checks if critical environment variables are set."""
+        missing = []
+        if not Config.GROQ_API_KEY:
+            missing.append("GROQ_API_KEY")
+        if not Config.MT5_LOGIN:
+            missing.append("MT5_LOGIN")
+        if not Config.MT5_PASSWORD:
+            missing.append("MT5_PASSWORD")
+        if not Config.MT5_SERVER:
+            missing.append("MT5_SERVER")
+        
+        if missing:
+            raise EnvironmentError(f"Missing critical environment variables: {', '.join(missing)}. Please check your .env file.")
+        
+        # Validate data types for MT5 login
+        try:
+            int(Config.MT5_LOGIN)
+        except (ValueError, TypeError):
+             raise EnvironmentError("MT5_LOGIN must be an integer.")
+
+        print(f"Configuration loaded. Backtest Mode: {Config.BACKTEST_MODE}")
