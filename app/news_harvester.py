@@ -3,6 +3,8 @@ import re
 from datetime import datetime
 import json
 
+import ssl
+
 class NewsHarvester:
     def __init__(self):
         self.url = "https://www.forexfactory.com/calendar"
@@ -22,8 +24,13 @@ class NewsHarvester:
             return self._format_news(self.cache)
 
         try:
+            # Create unverified SSL context to bypass Azure VM cert issues
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
             req = urllib.request.Request(self.url, headers=self.headers)
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, context=ctx) as response:
                 html = response.read().decode('utf-8')
             
             with open("debug_calendar.html", "w", encoding="utf-8") as f:
