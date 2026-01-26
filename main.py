@@ -272,15 +272,23 @@ def main():
                         decision["reasoning_summary"] = f"⏳ Cooldown: Waiting {remaining}s for next scan..."
                         run_ai = False
                     else:
-                        # 100% EFFICIENCY: SMC GATEKEEPER
-                        # If Price is NOT in a Zone, DO NOT CALL AI. Use Python Logic to save tokens.
-                        # This ensures we only pay for AI reasoning when there is a valid setup candidate.
-                        if Config.SMART_FILTER and "[INSIDE_ZONE (READY)]" not in market_summary:
-                            if not is_exciting: # Allow RSI extremes to bypass (optional, but safer to block)
-                                 print("💤 SMC Gatekeeper: Price not in OB. Saving Tokens.")
-                                 decision["reasoning_summary"] = "💤 SMC Gatekeeper: Price not in OB. (100% Efficiency)"
+                        # 100% EFFICIENCY: HYBRID GATEKEEPER (SMC + TECHNICALS)
+                        # Rule 1: SMC Order Block
+                        in_zone = "[INSIDE_ZONE (READY)]" in market_summary
+                        
+                        # Rule 2: Technical Confluence (2+ Indicators)
+                        is_confluent, conf_reason = sensor.check_technical_confluence()
+                        
+                        if Config.SMART_FILTER and not in_zone and not is_confluent:
+                            if not is_exciting: # Allow RSI extremes to bypass
+                                 print("💤 Gatekeeper: No SMC Zone & Weak Technicals. Saving Tokens.")
+                                 decision["reasoning_summary"] = "💤 Hybrid Gatekeeper: No Setup (SMC/Tech). (100% Efficiency)"
                                  run_ai = False
-                                 last_ai_scan = time.time() # Reset timer to avoid checking every loop
+                                 last_ai_scan = time.time() 
+                        
+                        if is_confluent and run_ai:
+                             # Inject Confluence Reason into AI Context
+                             market_summary += f"\n[TECHNICAL ALERT]: {conf_reason} (Ignoring missing OB)."
                         
                         if run_ai:
                             last_ai_scan = time.time() # Reset timer

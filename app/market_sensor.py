@@ -213,6 +213,65 @@ class MarketSensor:
 
 
             
+    def check_technical_confluence(self):
+        """
+        Checks for Strong Technical Confluence (to bypass SMC requirement).
+        Criteria (2+ Indicators):
+        - BUY: Price > EMA50 AND (MACD > Signal OR RSI > 50) AND MACD > 0
+        - SELL: Price < EMA50 AND (MACD < Signal OR RSI < 50) AND MACD < 0
+        Returns: Tuple (bool, str) -> (is_confluent, reason)
+        """
+        try:
+            df = self.get_market_data()
+            latest = df.iloc[-1]
+            
+            # Extract Values
+            close = latest['close']
+            ema50 = latest['EMA_50']
+            ema200 = latest['EMA_200']
+            macd = latest['MACD']
+            signal = latest['MACDs']
+            rsi = latest['RSI_14']
+            
+            score = 0
+            reasons = []
+            
+            # --- BULLISH CHECK ---
+            if close > ema50:
+                if macd > signal:
+                    score += 1
+                    reasons.append("MACD Bullish Cross")
+                if rsi > 50 and rsi < 75:
+                    score += 1
+                    reasons.append("RSI Bullish Momentum")
+                if close > ema200:
+                    score += 1
+                    reasons.append("Price > EMA200")
+                    
+                if score >= 2:
+                    return True, f"[TECHNICAL CONFLUENCE: BULLISH] {' + '.join(reasons)}"
+
+            # --- BEARISH CHECK ---
+            elif close < ema50:
+                if macd < signal:
+                    score += 1
+                    reasons.append("MACD Bearish Cross")
+                if rsi < 50 and rsi > 25:
+                    score += 1
+                    reasons.append("RSI Bearish Momentum")
+                if close < ema200:
+                    score += 1
+                    reasons.append("Price < EMA200")
+                    
+                if score >= 2:
+                    return True, f"[TECHNICAL CONFLUENCE: BEARISH] {' + '.join(reasons)}"
+
+            return False, "Weak Technicals"
+            
+        except Exception as e:
+            print(f"Confluence Check Error: {e}")
+            return False, "Error"
+
     def get_market_summary(self):
         """
         Returns a human-readable summary of the market state for the AI.
