@@ -21,6 +21,10 @@ class Config:
     MAX_OPEN_TRADES = 3 # Pyramiding Limit
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
     
+    # Phase 68: Dynamic Risk
+    ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL
+    MAX_DAILY_LOSS = 0.05 # 5% Max Daily Loss (Circuit Breaker)
+    
     # Credentials
     MT5_LOGIN = os.getenv("MT5_LOGIN")
     MT5_PASSWORD = os.getenv("MT5_PASSWORD")

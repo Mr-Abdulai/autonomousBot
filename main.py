@@ -10,6 +10,8 @@ from app.risk_manager import IronCladRiskManager
 from app.execution_engine import ExecutionEngine
 from app.dashboard_logger import DashboardLogger
 from app.performance_analyzer import PerformanceAnalyzer
+from app.time_manager import TimeManager
+from app.bif_brain import BIFBrain
 
 def main():
     print("=== Hybrid Neuro-Symbolic Trading System Starting ===")
@@ -27,7 +29,10 @@ def main():
     risk_manager = IronCladRiskManager()
     executor = ExecutionEngine()
     logger = DashboardLogger()
+    logger = DashboardLogger()
     analyzer = PerformanceAnalyzer() # Memory Component
+    time_manager = TimeManager()
+    brain = BIFBrain() # Phase 69: The Alpha Brain
     
     # 3. Connection Check (Early Fail)
     if not sensor.initialize():
@@ -109,6 +114,13 @@ def main():
             
             account_info['daily_pnl'] = daily_pnl
             account_info['total_pnl'] = total_pnl
+            
+            # Initialize BIF Stats container
+            bif_stats = {}
+
+            # Phase 68: Update Risk Shield with latest Equity 
+            # (Allows dynamic sizing & circuit breaker)
+            risk_manager.update_account_state(account_info['equity'])
 
             # A. Get Current Market Data
             try:
@@ -116,6 +128,32 @@ def main():
                 current_price = df.iloc[-1]['close']
                 market_summary = sensor.get_market_summary()
                 latest_indicators = sensor.get_latest_indicators()
+                
+                # Phase 70: Neuro-Symbolic Fusion (BIF)
+                # Analyze Regime (Trend vs Range vs Chaos)
+                bif_stats = brain.analyze_market_state(df)
+                
+                # Enhance Market Summary for AI
+                regime_tag = "UNKNOWN"
+                if bif_stats['hurst'] > 0.55:
+                    regime_tag = "TRENDING (PERSISTENT)"
+                elif bif_stats['hurst'] < 0.45:
+                    regime_tag = "MEAN REVERTING (CHOPPY)"
+                else:
+                    regime_tag = "RANDOM WALK (NOISE)"
+                    
+                if bif_stats['entropy'] > 0.8:
+                    regime_tag += " [HIGH CHAOS - CAUTION]"
+                
+                bif_context = f"""
+=== MARKET REGIME ANALYSIS (BIF ENGINE) ===
+Regime: {regime_tag}
+Hurst Exponent: {bif_stats['hurst']} (Memory)
+Shannon Entropy: {bif_stats['entropy']} (Signal Quality)
+Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
+"""
+                market_summary += bif_context
+                print(f"🧠 BIF: {regime_tag} | H:{bif_stats['hurst']} E:{bif_stats['entropy']}")
             except Exception as e:
                 print(f"Data Fetch Error: {e}. Retrying in 60s...")
                 time.sleep(60)
@@ -167,7 +205,16 @@ def main():
                 # No trades open
                 can_execute_new = True
 
-            # D. VALIDATE SPREAD (News/Volatility Guard)
+            # D. GATE 1: TIME & SESSION CHECK (Phase 67)
+            # We strictly enforce "Kill Zones" (Night/Asia) to prevent low-liquidity trading.
+            if not time_manager.is_market_open():
+                session_status = time_manager.get_session_status()
+                if can_execute_new:
+                    print(f"💤 TIME GUARD: Market Closed/Kill Zone ({session_status}). Sleeping.")
+                    decision["reasoning_summary"] = f"💤 {session_status}. Waiting for London."
+                can_execute_new = False # Force Block
+                
+            # E. VALIDATE SPREAD (News/Volatility Guard)
             current_spread = latest_indicators.get('spread', 0)
             if not risk_manager.validate_spread(current_spread):
                 if can_execute_new: 
@@ -272,23 +319,67 @@ def main():
                         decision["reasoning_summary"] = f"⏳ Cooldown: Waiting {remaining}s for next scan..."
                         run_ai = False
                     else:
-                        # 100% EFFICIENCY: HYBRID GATEKEEPER (SMC + TECHNICALS)
-                        # Rule 1: SMC Order Block
+                        # 0. CHAOS GUARD (Phase 70)
+                        # If Entropy is too high (Pure Noise), do not trade.
+                        current_entropy = bif_stats.get('entropy', 0.5)
+                        if current_entropy > 0.95:
+                             print(f"💤 CHAOS GUARD: Entropy {current_entropy:.2f} > 0.95. Market is Random Noise. Sleeping.")
+                             decision["reasoning_summary"] = f"💤 Chaos Guard: Market is too random (Entropy {current_entropy:.2f})."
+                             run_ai = False
+
+                        # 100% EFFICIENCY: ADVANCED GATEKEEPER 4.0 (REGIME + PATTERN)
+                        
+                        # 1. SMC Order Block (The Golden Setup)
                         in_zone = "[INSIDE_ZONE (READY)]" in market_summary
                         
-                        # Rule 2: Technical Confluence (2+ Indicators)
-                        is_confluent, conf_reason = sensor.check_technical_confluence()
+                        # 2. Advanced Technicals (Must be context-aware)
+                        # Fetch Candlestick Patterns
+                        patterns = sensor.detect_patterns(df)
+                        has_pattern = len(patterns) > 0
+                        pattern_str = ", ".join(patterns) if patterns else "NONE"
                         
-                        if Config.SMART_FILTER and not in_zone and not is_confluent:
-                            if not is_exciting: # Allow RSI extremes to bypass
-                                 print("💤 Gatekeeper: No SMC Zone & Weak Technicals. Saving Tokens.")
-                                 decision["reasoning_summary"] = "💤 Hybrid Gatekeeper: No Setup (SMC/Tech). (100% Efficiency)"
+                        # Determine Regime Strictness
+                        hurst = bif_stats.get('hurst', 0.5)
+                        is_trending = hurst > 0.55
+                        is_ranging = hurst < 0.45
+                        
+                        is_valid_setup = False
+                        setup_reason = ""
+
+                        # --- LOGIC BRANCHING ---
+                        # A. SMC (Always Valid)
+                        if in_zone:
+                            is_valid_setup = True
+                            setup_reason = "[SMC ORDER BLOCK]"
+                        
+                        # B. TREND REGIME (Follow Trend)
+                        elif is_trending:
+                            # Valid if: Tech Confluence + (Pattern OR Pullback)
+                            is_confluent, conf_reason = sensor.check_technical_confluence()
+                            if is_confluent and has_pattern:
+                                is_valid_setup = True
+                                setup_reason = f"[TREND PULLBACK] {pattern_str} + {conf_reason}"
+                        
+                        # C. RANGE REGIME (Mean Reversion)
+                        elif is_ranging:
+                            # Valid if: RSI Extreme + Reversal Pattern (Pinbar/Engulfing)
+                            rsi = latest_indicators.get('rsi', 50)
+                            is_extreme = rsi > 70 or rsi < 30
+                            if is_extreme and has_pattern:
+                                is_valid_setup = True
+                                setup_reason = f"[RANGE REVERSAL] {pattern_str} + RSI Extreme. (Hurst {hurst:.2f})"
+
+                        # Smart Filter Enforcer
+                        if Config.SMART_FILTER and not is_valid_setup:
+                            if not is_exciting: # Allow pure News excitement to bypass? Maybe not.
+                                 print(f"💤 Gatekeeper: No Valid Setup for Regime. (Pattern: {pattern_str}). Saving Tokens.")
+                                 decision["reasoning_summary"] = f"💤 Gatekeeper: No Setup. Regime={ 'Trend' if is_trending else 'Range' }. Pattern={pattern_str}."
                                  run_ai = False
                                  last_ai_scan = time.time() 
                         
-                        if is_confluent and run_ai:
-                             # Inject Confluence Reason into AI Context
-                             market_summary += f"\n[TECHNICAL ALERT]: {conf_reason} (Ignoring missing OB)."
+                        if is_valid_setup and run_ai:
+                             # Inject Setup Reason into AI Context
+                             market_summary += f"\n[GATE 4 PASSED]: {setup_reason}"
                         
                         if run_ai:
                             last_ai_scan = time.time() # Reset timer
@@ -314,7 +405,7 @@ def main():
                         decision['reasoning_summary'] = ai_decision.get('reasoning_summary', 'Signal Validated')
             
             # UPDATE DASHBOARD (Now that we have fresh decision & market data)
-            logger.update_system_state(account_info, active_trades, latest_indicators, decision)
+            logger.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats)
             logger.update_market_history(df)
 
             # E. Execution Logic (Only if AI triggered a NEW signal)

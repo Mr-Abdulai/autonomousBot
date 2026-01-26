@@ -208,6 +208,50 @@ class MarketSensor:
         
         return f"{status} {debug_suffix}"
 
+    def detect_patterns(self, df):
+        """
+        Detects Price Action Patterns (Pinbar, Engulfing).
+        Returns a dictionary of patterns found on the latest candle.
+        """
+        latest = df.iloc[-1]
+        prev = df.iloc[-2]
+        patterns = []
+        
+        # 1. Engulfing
+        # Body size
+        lat_body = abs(latest['close'] - latest['open'])
+        prev_body = abs(prev['close'] - prev['open'])
+        
+        # Bullish Engulfing
+        if (prev['close'] < prev['open']) and \
+           (latest['close'] > latest['open']) and \
+           (latest['close'] > prev['open']) and \
+           (latest['open'] < prev['close']):
+               patterns.append("BULLISH_ENGULFING")
+               
+        # Bearish Engulfing
+        elif (prev['close'] > prev['open']) and \
+             (latest['close'] < latest['open']) and \
+             (latest['close'] < prev['open']) and \
+             (latest['open'] > prev['close']):
+                patterns.append("BEARISH_ENGULFING")
+
+        # 2. Pinbar (Hammer / Shooting Star)
+        # Wick calculation
+        lat_range = latest['high'] - latest['low']
+        upper_wick = latest['high'] - max(latest['close'], latest['open'])
+        lower_wick = min(latest['close'], latest['open']) - latest['low']
+        
+        if lat_range > 0:
+            # Hammer (Bullish Pinbar) - Long Lower Wick
+            if (lower_wick > (lat_body * 2)) and (upper_wick < (lat_body * 0.5)):
+                patterns.append("BULLISH_PINBAR")
+            # Star (Bearish Pinbar) - Long Upper Wick
+            elif (upper_wick > (lat_body * 2)) and (lower_wick < (lat_body * 0.5)):
+                patterns.append("BEARISH_PINBAR")
+        
+        return patterns
+
 
 
 

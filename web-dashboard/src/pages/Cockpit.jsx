@@ -175,6 +175,23 @@ function Cockpit() {
 
                 {/* Right Col: Ticker & Mini Chart */}
                 <div className="col-span-8 flex flex-col gap-6">
+
+                    {/* Phase 71: BIF Physics Row */}
+                    <div className="grid grid-cols-3 gap-4">
+                        <MetricCard title="Market Regime" value={
+                            (data?.bif_analysis?.hurst || 0.5) > 0.55 ? "TRENDING" :
+                                (data?.bif_analysis?.hurst || 0.5) < 0.45 ? "RANGING" : "RANDOM"
+                        } sub={data?.bif_analysis?.entropy > 0.9 ? "CHAOTIC" : "STABLE"} />
+
+                        <MetricCard title="Hurst (Memory)" value={data?.bif_analysis?.hurst?.toFixed(3) || '--'} sub={
+                            (data?.bif_analysis?.hurst || 0.5) > 0.5 ? "Persistent" : "Mean Rev"
+                        } />
+
+                        <MetricCard title="Entropy (Chaos)" value={data?.bif_analysis?.entropy?.toFixed(3) || '--'} sub={
+                            (data?.bif_analysis?.entropy || 0) > 0.8 ? "High Risk" : "Clean Signal"
+                        } />
+                    </div>
+
                     {/* Ticker Row */}
                     <div className="grid grid-cols-4 gap-4">
                         <MetricCard title="RSI (14)" value={market.rsi?.toFixed(1) || '--'} sub="Momentum" />
