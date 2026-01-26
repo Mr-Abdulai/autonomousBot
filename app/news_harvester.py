@@ -9,10 +9,25 @@ class NewsHarvester:
     def __init__(self):
         self.url = "https://www.forexfactory.com/calendar"
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.google.com/',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'cross-site',
+            'Sec-Fetch-User': '?1'
         }
         self.cache = []
         self.last_fetch = None
+
+    def _get_ssl_context(self):
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
 
     def fetch_upcoming_news(self):
         """
@@ -24,13 +39,8 @@ class NewsHarvester:
             return self._format_news(self.cache)
 
         try:
-            # Create unverified SSL context to bypass Azure VM cert issues
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            
             req = urllib.request.Request(self.url, headers=self.headers)
-            with urllib.request.urlopen(req, context=ctx) as response:
+            with urllib.request.urlopen(req, context=self._get_ssl_context()) as response:
                 html = response.read().decode('utf-8')
             
             with open("debug_calendar.html", "w", encoding="utf-8") as f:
@@ -126,9 +136,11 @@ class NewsHarvester:
         """
         # Force fresh fetch
         self.last_fetch = None 
+        # Force fresh fetch
+        self.last_fetch = None 
         try:
             req = urllib.request.Request(self.url, headers=self.headers)
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, context=self._get_ssl_context()) as response:
                 html = response.read().decode('utf-8')
             all_events = self._parse_html(html)
             
