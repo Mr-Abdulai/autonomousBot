@@ -28,16 +28,18 @@ class GroqStrategist:
             "2. TREND & STRUCTURE (THE SETUP):\n"
             "   - NORMAL CONDITIONS: H4 and M15 Trends MUST Match (Pro Scalping).\n"
             "   - NEWS CONDITIONS: If Fundamental Bias is STRONG, you may trade AGAINST the M15 trend if entering *Pre-News* (Anticipatory).\n"
-            "   - ENTRY TRIGGER: Price MUST be inside a valid Order Block (OB).\n"
-            "     * CONFIRMED (Ready): Only trade OBs marked '[INSIDE_ZONE (READY)]'.\n"
-            "     * FILTER: Do not trade if Price is not in a Zone.\n"
+            "   - ENTRY TRIGGER (HYBRID):\n"
+            "     * OPTION A (SMC): Price inside '[INSIDE_ZONE (READY)]' Order Block.\n"
+            "     * OPTION B (TECHNICALS): Context contains '[TECHNICAL ALERT]'. This is a Python-Verified Signal. TRUST IT.\n"
+            "     * FILTER: Do not trade if neither Option A nor B is present.\n"
             "3. EXECUTION LOGIC:\n"
-            "   - BUY: (Fundamentally Bullish OR Trend Bullish) AND Price in Bullish OB [INSIDE_ZONE].\n"
-            "   - SELL: (Fundamentally Bearish OR Trend Bearish) AND Price in Bearish OB [INSIDE_ZONE].\n"
-            "   - HOLD: No High Impact News AND No Trend Match AND No OB.\n"
+            "   - BUY: (Fundamentally Bullish OR Trend Bullish) AND (Inside [INSIDE_ZONE] OR [TECHNICAL ALERT] Bullish).\n"
+            "   - SELL: (Fundamentally Bearish OR Trend Bearish) AND (Inside [INSIDE_ZONE] OR [TECHNICAL ALERT] Bearish).\n"
+            "   - HOLD: No High Impact News AND No Trend Match AND No Setup.\n"
             "4. CONFIDENCE SCORING:\n"
-            "   - 1.0: Perfect alignment (Fundamentally Supported + Trend Aligned + Inside OB).\n"
-            "   - 0.8: Predictive Entry (Strong Fundamental Bias + Inside OB, even if Trend varies).\n"
+            "   - 1.0: Perfect alignment (Fundamentally Supported + Trend Aligned + Setup).\n"
+            "   - 0.9: [TECHNICAL ALERT] Present (This is a high-probability algo signal).\n"
+            "   - 0.8: Predictive Entry (Strong Fundamental Bias + Inside OB).\n"
             "   - 0.0: No Setup.\n"
             "JSON Format:\n"
             "{"
@@ -138,12 +140,16 @@ class GroqStrategist:
         ZERO TRUST LAYER:
         Overrides AI decision if strict conditions are not met in the context string.
         """
-        # Rule: Must have [INSIDE_ZONE (READY)] in context to trade
-        if "INSIDE_ZONE (READY)" not in market_data and decision['action'] != "HOLD":
-            print("[BLOCK] ZERO TRUST INTERVENTION: AI attempted to trade without valid INSIDE_ZONE OB.")
+        # Rule: Must have [INSIDE_ZONE (READY)] OR [TECHNICAL ALERT] to trade
+        # If neither is present, block the trade.
+        has_smc = "INSIDE_ZONE (READY)" in market_data
+        has_tech = "[TECHNICAL ALERT]" in market_data
+        
+        if not has_smc and not has_tech and decision['action'] != "HOLD":
+            print(f"[BLOCK] ZERO TRUST INTERVENTION: AI attempted to trade without valid Setup.")
             decision['action'] = "HOLD"
             decision['confidence_score'] = 0.0
-            decision['reasoning_summary'] = f"[BLOCK] HARD OVERRIDE: Python Logic blocked trade. No Order Block is marked [INSIDE_ZONE (READY)]. AI Reasoning was: {decision.get('reasoning_summary', 'Unknown')}"
+            decision['reasoning_summary'] = f"[BLOCK] HARD OVERRIDE: Python Logic blocked trade. No OB or Technical Alert. AI Reasoning: {decision.get('reasoning_summary', 'Unknown')}"
             
         return decision
 
