@@ -143,6 +143,8 @@ class TrendHawk(ShadowStrategy):
                 risk = current_price - p_sl
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
                 return {'action': 'BUY', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price + 2*risk}
+            else:
+                 return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"Price {current_price:.5f} < Breakout {high_x:.5f}"}
                 
         elif current_price < ema_50:
             # Bearish Breakout
@@ -151,8 +153,10 @@ class TrendHawk(ShadowStrategy):
                 risk = p_sl - current_price
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
                 return {'action': 'SELL', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price - 2*risk}
+            else:
+                 return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"Price {current_price:.5f} > Breakout {low_x:.5f}"}
                 
-        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0}
+        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Against Trend (EMA50)"}
 
 class MeanReverter(ShadowStrategy):
     """

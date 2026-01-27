@@ -137,7 +137,9 @@ Current Leader: {darwin.leader.name}
             if run_ai:
                 darwin_signal = darwin.get_alpha_signal(df, latest_indicators, mtf_data)
                 if darwin_signal['action'] == "HOLD":
-                    decision['reasoning_summary'] = f"Darwin Leader ({darwin.leader.name}) says HOLD."
+                    reason = darwin_signal.get('reason', 'Waiting for setup')
+                    print(f"⏳ Darwin Leader ({darwin.leader.name}) Waiting: {reason}")
+                    decision['reasoning_summary'] = f"Darwin Leader ({darwin.leader.name}) says HOLD: {reason}"
                     run_ai = False
                 else:
                     print(f"🔥 Darwin Leader ({darwin.leader.name}) Signals {darwin_signal['action']}!")
