@@ -1,4 +1,6 @@
 
+from app.config import Config
+
 class EquityCurveManager:
     """
     Phase 68: The Shield.
