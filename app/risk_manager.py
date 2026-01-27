@@ -26,7 +26,8 @@ class EquityCurveManager:
         """Called on startup to sync internal state with Live Account."""
         print(f"RiskManager: Syncing Start Equity to Live Balance: ${equity:.2f}")
         self.start_of_day_equity = equity
-        self.high_water_mark = max(self.high_water_mark, equity)
+        # Force Reset HWM to current equity to avoid inheriting 'Deep Drawdown' state from default $10k
+        self.high_water_mark = equity
             
         # 2. Calculate Drawdowns
         if self.high_water_mark > 0:
