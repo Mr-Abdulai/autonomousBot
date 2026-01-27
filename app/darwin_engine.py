@@ -266,6 +266,7 @@ class Sniper(ShadowStrategy):
                  
          return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "H1 Alignment Fail"}
 
+class DarwinEngine:
     def __init__(self):
         self.strategies = []
         self.state_file = os.path.join(Config.BASE_DIR, "darwin_state.json")
