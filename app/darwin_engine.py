@@ -106,11 +106,31 @@ class ShadowStrategy(ABC):
         if mtf_regime:
             hurst = mtf_regime.get('M15', {}).get('hurst', 0.5)
             
-            # Boost logic needs to check Class Name string
-            if "TrendHawk" in self.name and hurst > 0.55:
-                boost = 1.2 # trend regime favors TrendHawk
-            elif "MeanRev" in self.name and hurst < 0.45:
-                boost = 1.2 # chop regime favors MeanReverter
+            # Boost logic needs to check Class Name string AND Direction
+            regime_trend = mtf_regime.get('trend', 'NEUTRAL') # Expecting 'BULLISH', 'BEARISH', 'RANGING'
+            
+            # TrendHawk Logic (Trend Following)
+            if "TrendHawk" in self.name:
+                if hurst > 0.55: # Trending Regime
+                    # Directional Matching
+                    if regime_trend == 'BULLISH':
+                        if self.direction == 'LONG': boost = 1.3 # Strong Boost
+                        elif self.direction == 'SHORT': boost = 0.7 # Strong Penalty
+                    elif regime_trend == 'BEARISH':
+                        if self.direction == 'SHORT': boost = 1.3
+                        elif self.direction == 'LONG': boost = 0.7
+                else: 
+                     # Not trending? Penalize TrendHawk slightly
+                     boost = 0.9
+                     
+            # MeanReverter Logic (Counter Trend)
+            elif "MeanRev" in self.name:
+                if hurst < 0.45: # Mean Reversion Regime
+                     boost = 1.2
+                     # In Range, direction matters less, but we can prefer fading the macro trend?
+                     # For now, generic boost is fine.
+                else:
+                     boost = 0.8 # Don't mean revert in trends
                 
         # 2. Drawdown Penalty (Stability)
         # 10% DD = 1.2 penalty divisor, 20% DD = 1.4

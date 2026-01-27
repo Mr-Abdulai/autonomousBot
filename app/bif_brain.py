@@ -104,6 +104,22 @@ class BIFBrain:
         h1_hurst = results.get('H1', {}).get('hurst', 0.5)
         h4_hurst = results.get('H4', {}).get('hurst', 0.5)
         
+        # Calculate Trend Bias for Darwin Engine
+        trend_status = "RANGING"
+        
+        # Simple Moving Average Logic (using the last close available in the DFs)
+        # We need to know if we are generally UP or DOWN to bias the swarm.
+        # Let's use H1 EMA slope or price vs EMA.
+        
+        h1_df = data_dict.get('H1')
+        if h1_df is not None and len(h1_df) > 50:
+            h1_close = h1_df['close'].iloc[-1]
+            h1_ema50 = h1_df['close'].ewm(span=50).mean().iloc[-1]
+            if h1_close > h1_ema50:
+                trend_status = "BULLISH"
+            elif h1_close < h1_ema50:
+                trend_status = "BEARISH"
+        
         # Base Score from M15
         if m15_hurst > 0.55: # M15 Trending
             # Check H1 Permission
@@ -125,11 +141,13 @@ class BIFBrain:
                 alignment_score += 0.5
             else:
                 alignment_score -= 0.5 # H1 Trending (Dangerous to fade)
+                trend_status = "RANGING" # Force range even if EMA says trend, because hurst says chop
 
         return {
              "mtf_stats": results,
              "alignment_score": alignment_score, # > 0.5 means Safe to Trade
-             "summary": f"M15_H:{m15_hurst} | H1_H:{h1_hurst} | Score:{alignment_score}"
+             "trend": trend_status, # NEW: For Directional Boosting
+             "summary": f"M15_H:{m15_hurst} | H1_H:{h1_hurst} | Score:{alignment_score} | Trend:{trend_status}"
         }
 
     def _calculate_entropy(self, data: np.ndarray, bins: int = 20) -> float:
