@@ -1,30 +1,17 @@
 import time
 import sys
-print("DEBUG: Importing datetime...")
 from datetime import datetime, timedelta, timezone
-print("DEBUG: Importing MetaTrader5...")
 import MetaTrader5 as mt5
-print("DEBUG: Importing pandas...")
 import pandas as pd
-print("DEBUG: Importing Config...")
 from app.config import Config
-print("DEBUG: Importing MarketSensor...")
 from app.market_sensor import MarketSensor
-print("DEBUG: Importing GroqStrategist...")
 from app.groq_strategist import GroqStrategist
-print("DEBUG: Importing RiskManager...")
 from app.risk_manager import IronCladRiskManager
-print("DEBUG: Importing ExecutionEngine...")
 from app.execution_engine import ExecutionEngine
-print("DEBUG: Importing DashboardLogger...")
 from app.dashboard_logger import DashboardLogger
-print("DEBUG: Importing PerformanceAnalyzer...")
 from app.performance_analyzer import PerformanceAnalyzer
-print("DEBUG: Importing TimeManager...")
 from app.time_manager import TimeManager
-print("DEBUG: Importing BIFBrain...")
 from app.bif_brain import BIFBrain
-print("DEBUG: Imports Complete.")
 
 def main():
     print("=== Hybrid Neuro-Symbolic Trading System Starting ===")
