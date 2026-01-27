@@ -30,14 +30,14 @@ class EquityCurveManager:
             
         # 2. Calculate Drawdowns
         if self.high_water_mark > 0:
-            drawdown = (self.high_water_mark - current_equity)
+            drawdown = (self.high_water_mark - equity)
             self.current_drawdown_pct = (drawdown / self.high_water_mark) * 100.0
         else:
             self.current_drawdown_pct = 0.0
             
         # Daily Drawdown
         if self.start_of_day_equity > 0:
-            daily_loss = self.start_of_day_equity - current_equity
+            daily_loss = self.start_of_day_equity - equity
             self.daily_drawdown_pct = (daily_loss / self.start_of_day_equity) * 100.0
         else:
             self.daily_drawdown_pct = 0.0
