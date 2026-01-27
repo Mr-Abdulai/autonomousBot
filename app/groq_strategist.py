@@ -16,36 +16,35 @@ class GroqStrategist:
         self.model = "llama-3.3-70b-versatile" 
         
         self.system_prompt = (
-            "You are a 'Smart Money' Algo Trader (SMC). You trade Trend Continuations + Fundamental Catalysts.\n"
-            "PHILOSOPHY: 'Technicals tell us WHERE. Fundamentals tell us WHEN.'\n"
-            "STRICT EXECUTION RULES:\n"
-            "1. FUNDAMENTAL BIAS (THE CATALYST):\n"
-            "   - CHECK 'FUNDAMENTAL CONTEXT' below. Focus on High Impact USD/EUR Events.\n"
-            "   - PREDICTIVE LOGIC: Compare Matches of 'Forecast' vs 'Previous'.\n"
-            "     * If USD News Forecast > Previous (Good for USD) -> SHORT EURUSD BIAS.\n"
-            "     * If USD News Forecast < Previous (Bad for USD) -> LONG EURUSD BIAS.\n"
-            "   - If High Impact News is < 2 hours away, PRIOTIRIZE the Fundamental Bias over M15 Trend if they conflict.\n"
-            "2. TREND & STRUCTURE (THE SETUP):\n"
-            "   - NORMAL CONDITIONS: H4 and M15 Trends MUST Match (Pro Scalping).\n"
-            "   - NEWS CONDITIONS: If Fundamental Bias is STRONG, you may trade AGAINST the M15 trend if entering *Pre-News* (Anticipatory).\n"
-            "   - ENTRY TRIGGER (HYBRID):\n"
-            "     * OPTION A (SMC): Price inside '[INSIDE_ZONE (READY)]' Order Block.\n"
-            "     * OPTION B (TECHNICALS): Context contains '[TECHNICAL ALERT]'. This is a Python-Verified Signal. TRUST IT.\n"
-            "     * FILTER: Do not trade if neither Option A nor B is present.\n"
-            "3. EXECUTION LOGIC:\n"
-            "   - BUY: (Fundamentally Bullish OR Trend Bullish) AND (Inside [INSIDE_ZONE] OR [TECHNICAL ALERT] Bullish).\n"
-            "   - SELL: (Fundamentally Bearish OR Trend Bearish) AND (Inside [INSIDE_ZONE] OR [TECHNICAL ALERT] Bearish).\n"
-            "   - HOLD: No High Impact News AND No Trend Match AND No Setup.\n"
-            "4. CONFIDENCE SCORING:\n"
-            "   - 1.0: Perfect alignment (Fundamentally Supported + Trend Aligned + Setup).\n"
-            "   - 0.9: [TECHNICAL ALERT] Present (This is a high-probability algo signal).\n"
-            "   - 0.8: Predictive Entry (Strong Fundamental Bias + Inside OB).\n"
-            "   - 0.0: No Setup.\n"
-            "JSON Format:\n"
+            "You are a Senior Quantitative Portfolio Manager (Hedge Fund). You trade with cold, calculated mathematical precision.\n"
+            "YOUR GOAL: Maximize Sharpe Ratio. Minimize Drawdown. Quality > Quantity.\n"
+            "\n"
+            "--- MARKET PHYSICS (BIF ENGINE) ---\n"
+            "1. REGIME AWARENESS (HURST EXPONENT): \n"
+            "   - If Hurst > 0.55 (TRENDING): You are a Trend Follower. Buy Dips. Sell Rallies. IGNORE Counter-trend signals.\n"
+            "   - If Hurst < 0.45 (MEAN REVERSION): You are a Fader. Buy Lows. Sell Highs. IGNORE Breakout signals.\n"
+            "   - If Hurst is 0.45-0.55 (RANDOM): CASH IS KING. Do not trade.\n"
+            "2. SIGNAL QUALITY (ENTROPY):\n"
+            "   - If Entropy > 0.90: MARKET IS NOISY. Reduce size or HOLD. Do not gamble.\n"
+            "\n"
+            "--- ENTRY RULES (THE GATE) ---\n"
+            "You may ONLY enter if ONE of the following is true (AND confirmed by Gate 4):\n"
+            "A. [SMC ORDER BLOCK]: Price is INSIDE a verified Order Block.\n"
+            "B. [GATE 4 PASSED]: The Python engine detected a valid Regime + Pattern setup.\n"
+            "\n"
+            "CRITICAL: INDICATORS (RSI/MACD) ARE CONFIRMATIONS ONLY.\n"
+            "NEVER trade solely because 'RSI is low'. There MUST be a Structural Reason (OB or Pattern).\n"
+            "\n"
+            "--- EXECUTION LOGIC ---\n"
+            "- BUY: (Bullish Regime OR Bullish Catalyst) AND (Valid Setup).\n"
+            "- SELL: (Bearish Regime OR Bearish Catalyst) AND (Valid Setup).\n"
+            "- HOLD: No Setup, High Entropy, or Conflicting Signals.\n"
+            "\n"
+            "JSON OUTPUT FORMAT:\n"
             "{"
             "\"action\": \"BUY\"|\"SELL\"|\"HOLD\", "
-            "\"confidence_score\": float (0.0-1.0), "
-            "\"reasoning\": \"FUNDAMENTALS: [Analysis]. TECHNICALS: [Analysis]. DECISION: [Final].\""
+            "\"confidence_score\": 0.0-1.0, "
+            "\"reasoning\": \"REGIME: [Trend/Range]. SETUP: [Why?]. CONFIRMATION: [Indicators]. DECISION: [Final].\""
             "}"
         )
 
@@ -140,16 +139,16 @@ class GroqStrategist:
         ZERO TRUST LAYER:
         Overrides AI decision if strict conditions are not met in the context string.
         """
-        # Rule: Must have [INSIDE_ZONE (READY)] OR [TECHNICAL ALERT] to trade
+        # Rule: Must have [INSIDE_ZONE (READY)] OR [GATE 4 PASSED] to trade
         # If neither is present, block the trade.
         has_smc = "INSIDE_ZONE (READY)" in market_data
-        has_tech = "[TECHNICAL ALERT]" in market_data
+        has_gate4 = "[GATE 4 PASSED]" in market_data
         
-        if not has_smc and not has_tech and decision['action'] != "HOLD":
+        if not has_smc and not has_gate4 and decision['action'] != "HOLD":
             print(f"[BLOCK] ZERO TRUST INTERVENTION: AI attempted to trade without valid Setup.")
             decision['action'] = "HOLD"
             decision['confidence_score'] = 0.0
-            decision['reasoning_summary'] = f"[BLOCK] HARD OVERRIDE: Python Logic blocked trade. No OB or Technical Alert. AI Reasoning: {decision.get('reasoning_summary', 'Unknown')}"
+            decision['reasoning_summary'] = f"[BLOCK] HARD OVERRIDE: Python Logic blocked trade. No Valid Gate 4 Trigger. AI Reasoning: {decision.get('reasoning_summary', 'Unknown')}"
             
         return decision
 
