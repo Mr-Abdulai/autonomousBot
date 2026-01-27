@@ -6,14 +6,13 @@ from groq import Groq
 from app.config import Config
 
 class GroqStrategist:
-    def __init__(self):
+    def __init__(self, model: str = "llama-3.3-70b-versatile"):
         self.api_key = Config.GROQ_API_KEY
         if not self.api_key:
             raise ValueError("GROQ_API_KEY not found in configuration.")
         
         self.client = Groq(api_key=self.api_key)
-        # DeepSeek decommissioned. Reverting to Llama 3.3
-        self.model = "llama-3.3-70b-versatile" 
+        self.model = model 
         
         self.system_prompt = (
             "You are a Senior Quantitative Portfolio Manager (Hedge Fund). You trade with cold, calculated mathematical precision.\n"
