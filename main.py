@@ -93,7 +93,10 @@ def main():
                        all_deals = mt5.history_deals_get(start_date, now)
                        
                        if all_deals and len(all_deals) > 0:
-                           account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in all_deals])
+                           # FILTER OUT DEPOSITS (Type 2 = Balance)
+                           # We only want Trading Profit (Buy/Sell) + Fees
+                           trading_deals = [d for d in all_deals if d.type != mt5.DEAL_TYPE_BALANCE]
+                           account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in trading_deals])
                    except Exception as e:
                        print(f"PnL Calc Warning: {e}") # Log but don't crash loop
 
