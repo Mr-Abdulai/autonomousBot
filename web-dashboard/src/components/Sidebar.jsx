@@ -1,5 +1,4 @@
-import React from 'react';
-import { LayoutDashboard, BrainCircuit, Activity, Wallet, Settings } from 'lucide-react';
+import { LayoutDashboard, BrainCircuit, Activity, Wallet, Settings, Dna } from 'lucide-react';
 
 const Sidebar = ({ activePage, setActivePage }) => {
     const menuItems = [
@@ -7,6 +6,7 @@ const Sidebar = ({ activePage, setActivePage }) => {
         { id: 'cortex', label: 'Cortex', icon: BrainCircuit },
         { id: 'market', label: 'Deep Market', icon: Activity },
         { id: 'ledger', label: 'Ledger', icon: Wallet },
+        { id: 'darwin', label: 'Darwin Swarm', icon: Dna },
     ];
 
     return (
@@ -29,8 +29,8 @@ const Sidebar = ({ activePage, setActivePage }) => {
                             key={item.id}
                             onClick={() => setActivePage(item.id)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                                    ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/10'
-                                    : 'text-slate-400 hover:bg-fintech-border/50 hover:text-white'
+                                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/10'
+                                : 'text-slate-400 hover:bg-fintech-border/50 hover:text-white'
                                 }`}
                         >
                             <Icon className={`w-5 h-5 ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-white'}`} />

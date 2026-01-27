@@ -6,6 +6,8 @@ import Cortex from './pages/Cortex';
 import DeepMarket from './pages/DeepMarket';
 import Ledger from './pages/Ledger';
 
+import DarwinSwarm from './pages/DarwinSwarm';
+
 function App() {
   const [activePage, setActivePage] = useState('cockpit');
 
@@ -15,6 +17,7 @@ function App() {
       case 'cortex': return <Cortex />;
       case 'market': return <DeepMarket />;
       case 'ledger': return <Ledger />;
+      case 'darwin': return <DarwinSwarm />;
       default: return <Cockpit />;
     }
   };
