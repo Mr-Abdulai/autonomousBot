@@ -35,12 +35,8 @@ class BIFBrain:
     """
     
     def __init__(self):
-        self.hmm_model = None
         self.scaler = None
         if ML_AVAILABLE:
-            # 3 State Model: Range, Trend, Volatility
-            # n_mix = 2 (Gaussian Mixtures per state)
-            self.hmm_model = GMMHMM(n_components=3, n_mix=2, covariance_type="full", n_iter=100, random_state=42)
             self.scaler = StandardScaler()
 
     def analyze_market_state(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -230,16 +226,19 @@ class BIFBrain:
             X_scaled = self.scaler.fit_transform(X)
             
             # Train (Fit on history)
-            self.hmm_model.fit(X_scaled)
+            # Instantiating locally to avoid state accumulation warnings from hmmlearn
+            model = GMMHMM(n_components=3, n_mix=2, covariance_type="full", n_iter=100, random_state=42, init_params='stmcw')
+            
+            model.fit(X_scaled)
             
             # Decode (Viterbi Path)
-            hidden_states = self.hmm_model.predict(X_scaled)
+            hidden_states = model.predict(X_scaled)
             
             # Get current state (last one)
             current_state = hidden_states[-1]
             
             # Get Probabilities
-            probs = self.hmm_model.predict_proba(X_scaled)[-1]
+            probs = model.predict_proba(X_scaled)[-1]
             
             return int(current_state), probs
             
