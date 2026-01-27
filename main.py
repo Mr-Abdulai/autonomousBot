@@ -77,19 +77,25 @@ def main():
                    account_info['leverage'] = acc.leverage
                    
                    # --- CALCULATE PnL from History ---
-                   now = datetime.now()
-                   # Daily (Since Midnight)
-                   midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                   daily_deals = mt5.history_deals_get(midnight, now)
-                   if daily_deals:
-                       # Net Profit = Profit + Swap + Commission + Fee
-                       account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_deals])
-                   
-                   # Total (All Time - from Epoch 1970)
-                   # UTC timestamp 0 is safe for all broker nuances
-                   all_deals = mt5.history_deals_get(datetime(1970, 1, 1), now)
-                   if all_deals:
-                       account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in all_deals])
+                   try:
+                       now = datetime.now()
+                       # Daily (Since Midnight)
+                       midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                       daily_deals = mt5.history_deals_get(midnight, now)
+                       
+                       if daily_deals and len(daily_deals) > 0:
+                           # Net Profit = Profit + Swap + Commission + Fee
+                           account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_deals])
+                       
+                       # Total (All Time - Safer Start Date)
+                       # 1970 can cause overflow in some broker bridges. Using 2010.
+                       start_date = datetime(2010, 1, 1)
+                       all_deals = mt5.history_deals_get(start_date, now)
+                       
+                       if all_deals and len(all_deals) > 0:
+                           account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in all_deals])
+                   except Exception as e:
+                       print(f"PnL Calc Warning: {e}") # Log but don't crash loop
 
             # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
             if 'risk_synced' not in locals():
