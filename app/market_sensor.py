@@ -131,9 +131,30 @@ class MarketSensor:
         # Calculate Indicators (Custom)
         df = self.calculate_indicators(df)
         
-        # Cleanup
-        df.dropna(inplace=True)
         return df
+        
+    def fetch_mtf_data(self, n_candles: int = 500) -> dict:
+        """
+        Fetches M15, H1, and H4 data for the Matrix Analysis.
+        Returns: {'M15': df, 'H1': df, 'H4': df}
+        """
+        if not self.initialize():
+            raise ConnectionError("MT5 Init Failed")
+            
+        # Helper to fetch and clean
+        def _fetch(tf):
+            rates = mt5.copy_rates_from_pos(self.symbol, tf, 0, n_candles)
+            if rates is None or len(rates) == 0: return pd.DataFrame()
+            df = pd.DataFrame(rates)
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+            df.dropna(inplace=True)
+            return df
+            
+        return {
+            'M15': _fetch(self.timeframe), # Usually M15
+            'H1': _fetch(mt5.TIMEFRAME_H1),
+            'H4': _fetch(mt5.TIMEFRAME_H4)
+        }
 
     def calculate_indicators(self, df):
         """

@@ -128,11 +128,14 @@ def main():
                 current_price = df.iloc[-1]['close']
                 market_summary = sensor.get_market_summary()
                 latest_indicators = sensor.get_latest_indicators()
-                fractal_levels = sensor.get_latest_fractal_levels(df) # Phase 81: Smart Trailing
+                fractal_levels = sensor.get_latest_fractal_levels(df) # Phase 81
                 
-                # Phase 70: Neuro-Symbolic Fusion (BIF)
-                # Analyze Regime (Trend vs Range vs Chaos)
-                bif_stats = brain.analyze_market_state(df)
+                # Phase 82: The Matrix (Multi-Timeframe Regime)
+                mtf_data = sensor.fetch_mtf_data()
+                mtf_analysis = brain.analyze_mtf_regime(mtf_data)
+                
+                bif_stats = mtf_analysis['mtf_stats']['M15'] # Backwards compat for vars below
+                alignment_score = mtf_analysis['alignment_score']
                 
                 # Enhance Market Summary for AI
                 regime_tag = "UNKNOWN"
@@ -143,18 +146,18 @@ def main():
                 else:
                     regime_tag = "RANDOM WALK (NOISE)"
                     
-                if bif_stats['entropy'] > 0.8:
-                    regime_tag += " [HIGH CHAOS - CAUTION]"
+                if alignment_score < 0:
+                     regime_tag += " [⛔ MTF MISMATCH - BLOCKED]"
                 
                 bif_context = f"""
 === MARKET REGIME ANALYSIS (BIF ENGINE) ===
 Regime: {regime_tag}
 Hurst Exponent: {bif_stats['hurst']} (Memory)
 Shannon Entropy: {bif_stats['entropy']} (Signal Quality)
-Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
+MTF Alignment Score: {alignment_score} (H1/H4 Confirmation)
 """
                 market_summary += bif_context
-                print(f"🧠 BIF: {regime_tag} | H:{bif_stats['hurst']} E:{bif_stats['entropy']}")
+                print(f"🧠 BIF Matrix: Score {alignment_score} | {mtf_analysis['summary']}")
             except Exception as e:
                 print(f"Data Fetch Error: {e}. Retrying in 60s...")
                 time.sleep(60)
@@ -164,6 +167,21 @@ Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
             atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
             monitor_result = executor.monitor_open_trades(current_price, atr=atr_val, fractal_levels=fractal_levels)
             active_trades = monitor_result['trades'] # List of dicts
+            
+            # C. Determine System State & Decision
+            # Gate 0: MTF Alignment Check (The Matrix)
+            if alignment_score < 0:
+                 # If Score is negative, H1 is fighting M15. We Force Wait.
+                 decision = {
+                     "action": "HOLD",
+                     "confidence_score": 0.0,
+                     "reasoning_summary": f"⛔ MTF MISMATCH. M15 wants to trade but H1/H4 disagree (Score {alignment_score}). Waiting for alignment.",
+                     "contract_symbol": Config.SYMBOL
+                 }
+                 # Skip AI call
+                 run_ai = False
+            else:
+                 run_ai = True
             
             # C. Determine System State & Decision
             can_execute_new = False

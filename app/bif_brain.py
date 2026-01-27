@@ -79,6 +79,58 @@ class BIFBrain:
             "ml_active": ML_AVAILABLE
         }
 
+    def analyze_mtf_regime(self, data_dict: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
+        """
+        Matrix Analysis: Calculates Hurst/Entropy for M15, H1, H4.
+        Returns Composite Alignment Score (-1.0 to 1.0).
+        """
+        results = {}
+        alignment_score = 0
+        
+        # 1. Analyze Each Timeframe
+        for tf, df in data_dict.items():
+            if df.empty:
+                results[tf] = {'hurst': 0.5, 'entropy': 1.0} # Default to Random
+                continue
+                
+            stats = self.analyze_market_state(df)
+            results[tf] = stats
+            
+        # 2. Compute Alignment
+        # Core Thesis: Lower TF (M15) provides Signal, Higher TF (H1) provides Permission.
+        
+        m15_hurst = results.get('M15', {}).get('hurst', 0.5)
+        h1_hurst = results.get('H1', {}).get('hurst', 0.5)
+        h4_hurst = results.get('H4', {}).get('hurst', 0.5)
+        
+        # Base Score from M15
+        if m15_hurst > 0.55: # M15 Trending
+            # Check H1 Permission
+            if h1_hurst > 0.5:
+                alignment_score += 0.5 # H1 Supports Trend
+                
+                # Check H4 Bonus
+                if h4_hurst > 0.5:
+                    alignment_score += 0.5 # H4 Supports Trend
+                elif h4_hurst < 0.45:
+                     alignment_score -= 0.2 # H4 Mean Reverting (Headwind)
+            else:
+                # H1 is Mean Reverting (Blocking M15 Trend)
+                alignment_score -= 1.0 # VETO
+                
+        elif m15_hurst < 0.45: # M15 Mean Reverting
+            # Range Trading on M15 is risky unless H1 is also Ranging
+            if h1_hurst < 0.5:
+                alignment_score += 0.5
+            else:
+                alignment_score -= 0.5 # H1 Trending (Dangerous to fade)
+
+        return {
+             "mtf_stats": results,
+             "alignment_score": alignment_score, # > 0.5 means Safe to Trade
+             "summary": f"M15_H:{m15_hurst} | H1_H:{h1_hurst} | Score:{alignment_score}"
+        }
+
     def _calculate_entropy(self, data: np.ndarray, bins: int = 20) -> float:
         """
         Calculates Shannon Entropy of the return distribution.
