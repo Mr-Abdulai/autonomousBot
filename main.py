@@ -52,13 +52,31 @@ def main():
             # Gather Account Info
             account_info = {
                 "equity": 10000.0,
-                "balance": 10000.0
+                "balance": 10000.0,
+                "profit": 0.0,
+                "margin": 0.0,
+                "margin_free": 10000.0,
+                "name": "Sim",
+                "server": "SimServer",
+                "currency": "USD",
+                "leverage": 100
             }
             if not Config.BACKTEST_MODE and mt5.initialize():
                 acc = mt5.account_info()
                 if acc:
                    account_info['equity'] = acc.equity
                    account_info['balance'] = acc.balance
+                   account_info['profit'] = acc.profit
+                   account_info['margin'] = acc.margin
+                   account_info['margin_free'] = acc.margin_free
+                   account_info['name'] = acc.name
+                   account_info['server'] = acc.server
+                   account_info['currency'] = acc.currency
+                   account_info['leverage'] = acc.leverage
+            
+            # TODO: Add specific Daily PnL logic here if needed (via history_deals_get)
+            # For now, profit (floating) + balance delta is good enough for snapshot
+            account_info['daily_pnl'] = 0.0 # Placeholder for now to avoid breaking UI key checks
             
             # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
             if 'risk_synced' not in locals():
