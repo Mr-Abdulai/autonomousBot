@@ -59,7 +59,9 @@ def main():
                 "name": "Sim",
                 "server": "SimServer",
                 "currency": "USD",
-                "leverage": 100
+                "leverage": 100,
+                "daily_pnl": 0.0,
+                "total_pnl": 0.0
             }
             if not Config.BACKTEST_MODE and mt5.initialize():
                 acc = mt5.account_info()
@@ -73,11 +75,21 @@ def main():
                    account_info['server'] = acc.server
                    account_info['currency'] = acc.currency
                    account_info['leverage'] = acc.leverage
-            
-            # TODO: Add specific Daily PnL logic here if needed (via history_deals_get)
-            # For now, profit (floating) + balance delta is good enough for snapshot
-            account_info['daily_pnl'] = 0.0 # Placeholder for now to avoid breaking UI key checks
-            
+                   
+                   # --- CALCULATE PnL from History ---
+                   now = datetime.now()
+                   # Daily (Since Midnight)
+                   midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                   daily_deals = mt5.history_deals_get(midnight, now)
+                   if daily_deals:
+                       account_info['daily_pnl'] = sum([d.profit for d in daily_deals])
+                   
+                   # Total (All Time - naive, or last 30 days to save perf)
+                   # fetching from 1970 usually fine for retail accounts
+                   all_deals = mt5.history_deals_get(datetime(2020, 1, 1), now)
+                   if all_deals:
+                       account_info['total_pnl'] = sum([d.profit for d in all_deals])
+
             # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
             if 'risk_synced' not in locals():
                  risk_manager.sync_start_balance(account_info['equity'])
@@ -176,6 +188,13 @@ Current Leader: {darwin.leader.name}
             # Log State
             dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats)
             dashboard.update_market_history(df)
+            
+            # FORCE LOG DECISION for Cortex (CSV)
+            # Only log if it's NOT just "Scanning..." to save disk/spam?
+            # User wants "Cortex Updates", likely wants to see the thoughts.
+            if run_ai or decision['action'] != "WAIT":
+                # We log even Holds so the user sees the logic "Why Hold?"
+                dashboard.log_decision(decision)
 
             # E. Execution Logic
             if decision['action'] in ["BUY", "SELL"]:
