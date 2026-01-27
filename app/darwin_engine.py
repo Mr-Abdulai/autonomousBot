@@ -130,10 +130,17 @@ class TrendHawk(ShadowStrategy):
         # Dynamic Period
         period = self.params.get('period', 20)
         
-        # Rolling High/Low based on dynamic period
-        high_x = df['high'].rolling(period).max().iloc[-1]
-        low_x = df['low'].rolling(period).min().iloc[-1]
-        ema_50 = indicators.get('EMA_50', 0)
+        # FIX 1: Robust Indicator Lookup (Handle Case Sensitivity)
+        # Sensor sends 'ema_50', we want that.
+        ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
+        
+        # FIX 2: Correct Breakout Logic (Price > Previous N Highs)
+        # We must shift(1) to exclude the current forming candle from the reference
+        prev_highs = df['high'].shift(1).rolling(period).max()
+        prev_lows = df['low'].shift(1).rolling(period).min()
+        
+        high_x = prev_highs.iloc[-1]
+        low_x = prev_lows.iloc[-1]
         
         # Trend Filter
         if current_price > ema_50:
@@ -167,30 +174,24 @@ class MeanReverter(ShadowStrategy):
         latest = df.iloc[-1]
         close = latest['close']
         
-        # We need to manually calc dynamic bands if they aren't pre-calced
-        # But for efficiency, we can use the pre-calced BB_Upper (2.0) and scale the width?
-        # Or just re-calc. Shadow mode speed is critical.
-        # Let's approximate: Width = (Upper - Basis). New Width = Width * (Desired / 2.0).
+        # FIX 1: Robust Keys
+        bb_upper_std = indicators.get('bb_upper', indicators.get('BB_Upper', 0))
+        bb_lower_std = indicators.get('bb_lower', indicators.get('BB_Lower', 0))
         
-        bb_upper_std = indicators.get('BB_Upper', 0)
-        bb_lower_std = indicators.get('BB_Lower', 0)
-        
-        if bb_upper_std == 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        if bb_upper_std == 0: 
+             return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': "Bollinger Data Missing"}
         
         basis = (bb_upper_std + bb_lower_std) / 2
         std_width = bb_upper_std - basis
         
         user_std = self.params.get('std_dev', 2.0)
-        # Scale the width
-        # If user wants 2.5, and standard is 2.0.
-        # New Width = Old Width * (2.5 / 2.0)
         width_scalar = user_std / 2.0
         
         my_upper = basis + (std_width * width_scalar)
         my_lower = basis - (std_width * width_scalar)
         
-        rsi = indicators.get('RSI_14', 50)
-        ema_50 = indicators.get('EMA_50', close)
+        rsi = indicators.get('rsi', indicators.get('RSI_14', 50))
+        ema_50 = indicators.get('ema_50', indicators.get('EMA_50', close))
         
         # Fade Highs (Sell at Top of Range)
         if close > my_upper and rsi > 70:
@@ -200,7 +201,7 @@ class MeanReverter(ShadowStrategy):
         if close < my_lower and rsi < 30:
             return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': ema_50}
             
-        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0}
+        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Inside Bands"}
 
 class Sniper(ShadowStrategy):
     """
@@ -214,15 +215,13 @@ class Sniper(ShadowStrategy):
          h1_close = h1_df.iloc[-1]['close']
          h1_ma = h1_df['close'].rolling(50).mean().iloc[-1] # Simple H1 Trend
          
-         # Reuse TrendHawk 20 logic without params
-         # We need to instantiate a temp TrendHawk or call logic.
-         # Cleaner: Just rewrite the logic to be safe.
-         
          current_price = df.iloc[-1]['close']
-         high_20 = df['high'].rolling(20).max().iloc[-1]
-         low_20 = df['low'].rolling(20).min().iloc[-1]
-         ema_50 = indicators.get('EMA_50', 0)
+         # FIX: Shift(1) here too
+         high_20 = df['high'].shift(1).rolling(20).max().iloc[-1]
+         low_20 = df['low'].shift(1).rolling(20).min().iloc[-1]
+         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
          
+         # ... (Rest of logic similar to TrendHawk but checking H1)
          action = "HOLD"
          sl = 0
          tp = 0
@@ -243,7 +242,7 @@ class Sniper(ShadowStrategy):
              if h1_close < h1_ma:
                  return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
                  
-         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0}
+         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "H1 Alignment Fail"}
 
 class DarwinEngine:
     def __init__(self):
