@@ -82,13 +82,14 @@ def main():
                    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
                    daily_deals = mt5.history_deals_get(midnight, now)
                    if daily_deals:
-                       account_info['daily_pnl'] = sum([d.profit for d in daily_deals])
+                       # Net Profit = Profit + Swap + Commission + Fee
+                       account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_deals])
                    
-                   # Total (All Time - naive, or last 30 days to save perf)
-                   # fetching from 1970 usually fine for retail accounts
-                   all_deals = mt5.history_deals_get(datetime(2020, 1, 1), now)
+                   # Total (All Time - from Epoch 1970)
+                   # UTC timestamp 0 is safe for all broker nuances
+                   all_deals = mt5.history_deals_get(datetime(1970, 1, 1), now)
                    if all_deals:
-                       account_info['total_pnl'] = sum([d.profit for d in all_deals])
+                       account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in all_deals])
 
             # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
             if 'risk_synced' not in locals():
