@@ -414,3 +414,20 @@ class DarwinEngine:
             score = self.last_scores.get(strat.name, 0)
             s += f" {i+1}. {strat.name}: Score {score:.0f} (Eq: ${strat.phantom_equity:.0f})\n"
         return s
+
+    def get_swarm_state(self) -> list:
+        """Returns full state of all strategies for Dashboard."""
+        data = []
+        for s in self.strategies:
+            data.append({
+                "name": s.name,
+                "equity": s.phantom_equity,
+                "score": self.last_scores.get(s.name, 0),
+                "wins": s.win_streak,
+                "losses": s.loss_streak,
+                "drawdown": s.max_drawdown,
+                "peak": s.peak_equity,
+                "direction": s.direction
+            })
+        # Sort by Score implicitly via the engine's sort order (which happens in update)
+        return data

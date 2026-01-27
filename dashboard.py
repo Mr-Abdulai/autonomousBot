@@ -127,7 +127,7 @@ state, df_log = load_data()
 
 # --- SIDEBAR NAVIGATION ---
 st.sidebar.markdown("## ⚡ SENTIENT")
-page = st.sidebar.radio("Navigation", ["1. COCKPIT", "2. CORTEX", "3. DEEP MARKET", "4. LEDGER"])
+page = st.sidebar.radio("Navigation", ["1. COCKPIT", "2. CORTEX", "3. DEEP MARKET", "4. LEDGER", "5. DARWIN SWARM"])
 
 st.sidebar.markdown("---")
 # Connection Status
@@ -360,6 +360,49 @@ elif page == "4. LEDGER":
             if st.button("Download CSV"):
                 df_log.to_csv("export_log.csv")
                 st.success("Saved to export_log.csv")
+
+# --- 5. DARWIN SWARM (Evolution) ---
+elif page == "5. DARWIN SWARM":
+    st.title("DARWINIAN EVOLUTION")
+    
+    if state and "darwin_swarm" in state:
+        swarm = state["darwin_swarm"]
+        
+        if swarm:
+            # Metrics for Leader
+            leader = swarm[0]
+            l1, l2, l3 = st.columns(3)
+            l1.metric("Current Alpha Leader", leader['name'])
+            l1.caption(f"Strategy Direction: {leader['direction']}")
+            l2.metric("Leader Score", f"{leader['score']:.0f}")
+            l3.metric("Leader Equity", f"${leader['equity']:.2f}")
+            
+            st.markdown("---")
+            
+            # Formatting Dataframe
+            df_swarm = pd.DataFrame(swarm)
+            
+            # Reorder Columns for readability
+            cols = ["name", "score", "equity", "direction", "wins", "losses", "drawdown", "peak"]
+            df_swarm = df_swarm[cols]
+            
+            # Styling
+            st.markdown("### 🧬 Strategy Ecosystem")
+            st.dataframe(
+                df_swarm.style.format({
+                    "equity": "${:,.2f}",
+                    "peak": "${:,.2f}",
+                    "score": "{:.1f}",
+                    "drawdown": "{:.2%}"
+                }).background_gradient(subset=["score"], cmap="viridis"),
+                use_container_width=True,
+                height=600
+            )
+            
+        else:
+            st.info("Swarm data empty. Waiting for next cycle...")
+    else:
+        st.info("Initializing Swarm Intel...")
 
 # Auto Refresh
 time.sleep(REFRESH_RATE_SEC)

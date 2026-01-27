@@ -196,7 +196,8 @@ Current Leader: {darwin.leader.name}
                 decision = risk_manager.validate_signal(analyzed_decision)
                 
             # Log State
-            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats)
+            swarm_state = darwin.get_swarm_state()
+            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state)
             dashboard.update_market_history(df)
             
             # FORCE LOG DECISION for Cortex (CSV)
