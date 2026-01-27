@@ -142,8 +142,9 @@ class GroqStrategist:
         # If neither is present, block the trade.
         has_smc = "INSIDE_ZONE (READY)" in market_data
         has_gate4 = "[GATE 4 PASSED]" in market_data
+        has_darwin = "[SIGNAL REQUEST]" in market_data
         
-        if not has_smc and not has_gate4 and decision['action'] != "HOLD":
+        if not has_smc and not has_gate4 and not has_darwin and decision['action'] != "HOLD":
             print(f"[BLOCK] ZERO TRUST INTERVENTION: AI attempted to trade without valid Setup.")
             decision['action'] = "HOLD"
             decision['confidence_score'] = 0.0

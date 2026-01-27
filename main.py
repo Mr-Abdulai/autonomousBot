@@ -60,6 +60,11 @@ def main():
                    account_info['equity'] = acc.equity
                    account_info['balance'] = acc.balance
             
+            # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
+            if 'risk_synced' not in locals():
+                 risk_manager.sync_start_balance(account_info['equity'])
+                 locals()['risk_synced'] = True
+            
             risk_manager.update_account_state(account_info['equity'])
             
             # A. SENSE

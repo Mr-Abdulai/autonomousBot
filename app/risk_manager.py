@@ -22,6 +22,12 @@ class EquityCurveManager:
         if current_equity > self.high_water_mark:
             self.high_water_mark = current_equity
             
+    def sync_balance(self, equity: float):
+        """Called on startup to sync internal state with Live Account."""
+        print(f"RiskManager: Syncing Start Equity to Live Balance: ${equity:.2f}")
+        self.start_of_day_equity = equity
+        self.high_water_mark = max(self.high_water_mark, equity)
+            
         # 2. Calculate Drawdowns
         if self.high_water_mark > 0:
             drawdown = (self.high_water_mark - current_equity)
@@ -71,6 +77,9 @@ class IronCladRiskManager:
 
     def update_account_state(self, equity: float, is_new_day: bool = False):
         self.equity_manager.update(equity, is_new_day)
+        
+    def sync_start_balance(self, equity: float):
+         self.equity_manager.sync_balance(equity)
 
     def validate_signal(self, decision: dict) -> dict:
         """
