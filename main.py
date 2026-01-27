@@ -73,6 +73,9 @@ def main():
             mtf_data = sensor.fetch_mtf_data()
             mtf_analysis = brain.analyze_mtf_regime(mtf_data)
             
+            # INJECT Regime for Darwin 2.0 (Smart Scoring)
+            mtf_data['analysis'] = mtf_analysis['mtf_stats']
+            
             bif_stats = mtf_analysis['mtf_stats']['M15']
             alignment_score = mtf_analysis['alignment_score']
             
