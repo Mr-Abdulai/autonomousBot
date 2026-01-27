@@ -4,6 +4,11 @@ import math
 from typing import Dict, Any, Tuple
 import logging
 
+import logging
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", module="hmmlearn")
+
 # Configure Logging for BIF
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("BIF_BRAIN")

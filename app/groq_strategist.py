@@ -57,6 +57,11 @@ class GroqStrategist:
             else:
                 cleaned = content.strip()
             
+            # SANITIZATION: Fix common LLM JSON syntax errors
+            cleaned = cleaned.replace(r"\_", "_") # Fix escaped underscores
+            cleaned = cleaned.replace(r"\n", " ") # Remove newlines in strings
+             # Fix escaped quotes if they aren't structural (harder, but usually the above fixes it)
+            
             # 2. Parse
             data = json.loads(cleaned)
             
