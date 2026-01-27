@@ -128,6 +128,7 @@ def main():
                 current_price = df.iloc[-1]['close']
                 market_summary = sensor.get_market_summary()
                 latest_indicators = sensor.get_latest_indicators()
+                fractal_levels = sensor.get_latest_fractal_levels(df) # Phase 81: Smart Trailing
                 
                 # Phase 70: Neuro-Symbolic Fusion (BIF)
                 # Analyze Regime (Trend vs Range vs Chaos)
@@ -161,7 +162,7 @@ Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
                 
             # B. Check for active trades & Manage them
             atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
-            monitor_result = executor.monitor_open_trades(current_price, atr=atr_val)
+            monitor_result = executor.monitor_open_trades(current_price, atr=atr_val, fractal_levels=fractal_levels)
             active_trades = monitor_result['trades'] # List of dicts
             
             # C. Determine System State & Decision

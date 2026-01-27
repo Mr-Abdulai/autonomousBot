@@ -251,6 +251,43 @@ class MarketSensor:
         
         return signal, level
 
+    def get_latest_fractal_levels(self, df):
+        """
+        Returns the price of the last CONFIRMED Up and Down Fractals.
+        Used for Structural Trailing Stops.
+        Returns: {'resistance': float, 'support': float}
+        """
+        # Ensure fractals are calculated
+        if 'fractal_high' not in df.columns:
+            df = TALib.identify_fractals(df)
+            
+        # Valid History (Excluding last 2 bars which are unconfirmed)
+        # Note: indentify_fractals uses forward shifting, so the boolean is effectively 'confirmed' 
+        # relative to the future, but in realtime simulation we only know it 2 bars later.
+        # But 'fractal_high' column is aligned to the *candle that is the high*.
+        # So we just search the past.
+        
+        # We need to make sure we don't peek into the future if this was backtesting, 
+        # but in live mode 'df' is history.
+        
+        # Latest Confirmable Fractal is at index -3 or earlier.
+        # Because we need i+1 and i+2 to confirm i.
+        valid_range = df.iloc[:-2] 
+        
+        last_resistance = 0.0
+        last_support = 0.0
+        
+        # Search backwards
+        up_fractals = valid_range[valid_range['fractal_high']]
+        if not up_fractals.empty:
+            last_resistance = up_fractals.iloc[-1]['high']
+            
+        down_fractals = valid_range[valid_range['fractal_low']]
+        if not down_fractals.empty:
+            last_support = down_fractals.iloc[-1]['low']
+            
+        return {'resistance': last_resistance, 'support': last_support}
+
 
 
 

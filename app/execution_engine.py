@@ -132,7 +132,7 @@ class ExecutionEngine:
         res = mt5.order_send(request)
         return res.retcode == mt5.TRADE_RETCODE_DONE
 
-    def monitor_open_trades(self, current_price: float, atr: float = 0.0) -> dict:
+    def monitor_open_trades(self, current_price: float, atr: float = 0.0, fractal_levels: dict = None) -> dict:
         """
         Monitors ALL open trades.
         Returns: {'count': int, 'trades': list, 'closed_pnl': float, 'managed_count': int}
@@ -172,58 +172,15 @@ class ExecutionEngine:
                     if not positions:
                         # Closed in MT5
                         is_closed = True
-                        # Fetch PnL logic here... (Simplified for brevity)
                         print(f"Trade {ticket} Closed in MT5.")
                         # Logic to fetch real PnL omitted for space, assuming 0 or approx
             
             # --- MANAGEMENT LOGIC (If Active) ---
-            if not is_closed:
-                # 1. Calc Stats
-                dist_total = abs(tp - open_price)
-                dist_covered = abs(current_price - open_price)
-                is_profit = (action=="BUY" and current_price>open_price) or (action=="SELL" and current_price<open_price)
-                
-                new_sl = None
-                
-                if is_profit and dist_total > 0:
-                    pct = dist_covered / dist_total
-                    
-                    # BE Trigger (50%)
-                    sl_at_be = (action=="BUY" and sl>=open_price) or (action=="SELL" and sl<=open_price)
-                    if pct >= 0.50 and not sl_at_be:
-                        new_sl = open_price
-                        print(f"💰 {ticket}: Moving to Break Even.")
-                    
-                    # Trailing (60%)
-                    if pct >= 0.60 and atr > 0:
-                        buf = atr * 1.5
-                        pot_sl = current_price - buf if action=="BUY" else current_price + buf
-                        if (action=="BUY" and pot_sl > sl) or (action=="SELL" and pot_sl < sl):
-                            new_sl = pot_sl
-                            print(f"🚀 {ticket}: Trailing Stop Update.")
-
-                if new_sl:
-                    if mode == "LIVE":
-                        if self.modify_order_sl(int(ticket), new_sl):
-                            trade['sl'] = new_sl
-                            updated = True
-                            managed_count += 1
-                    else:
-                        trade['sl'] = new_sl
             if not is_closed and mode == "LIVE":
-                # Only apply trailing stop if we have valid ATR
-                if atr > 0:
-                    # The apply_trailing_stop method will handle the modification and print statements
-                    # It also updates the local 'sl' in the trade dictionary if successful
-                    self.apply_trailing_stop(ticket, current_price, open_price, action, sl, tp, atr)
-                    # We don't need to explicitly set 'updated = True' or 'managed_count += 1' here
-                    # as the new method handles the MT5 interaction and prints its own status.
-                    # The local 'sl' update within apply_trailing_stop is for immediate awareness,
-                    # but the state will be reloaded from file on the next iteration anyway.
-                    # For simplicity, we'll let the next load_state pick up the actual SL from MT5.
-                    # If we wanted to track managed_count, we'd need apply_trailing_stop to return a bool.
-                    # For now, we'll assume it's managed if we attempt to apply it.
-                    managed_count += 1 # Increment if we attempted to apply trailing stop
+                # Apply Smart Trailing
+                # Uses ATR for validation but purely Structural (Fractal) targets if available
+                self.apply_trailing_stop(ticket, current_price, open_price, action, sl, tp, atr, fractal_levels)
+                managed_count += 1 
 
             # --- FINALIZATION ---
             if is_closed:
@@ -241,11 +198,11 @@ class ExecutionEngine:
             'managed_count': managed_count
         }
 
-    def apply_trailing_stop(self, ticket, current_price, entry_price, action, current_sl, tp, atr):
+    def apply_trailing_stop(self, ticket, current_price, entry_price, action, current_sl, tp, atr, fractal_levels=None):
         """
         Dynamically moves Stop Loss based on profit milestones.
-        1. Break Even: If Profit > 1R (Risk), Move SL to Entry.
-        2. Trailing: If Profit > 2R, Trail SL by 1.5 * ATR.
+        1. Break Even: If Profit > 1R.
+        2. Fractal Trail: If Profit > 2R, Move SL to most recent Fractal Support/Resistance.
         """
         try:
             risk = abs(entry_price - current_sl)
@@ -254,21 +211,27 @@ class ExecutionEngine:
             new_sl = None
             modification_reason = ""
             
+            # Logic: If Fractal is valid (not 0) use it. Else fallback to ATR? 
+            # Actually user asked for Fractal. If no fractal, we hold current SL.
+            
+            f_res = fractal_levels.get('resistance', 0.0) if fractal_levels else 0.0
+            f_sup = fractal_levels.get('support', 0.0) if fractal_levels else 0.0
+            
             if action == "BUY":
                 profit = current_price - entry_price
                 
                 # Trigger 1: Break Even (Profit > 1.0 * Risk)
                 if profit > (1.0 * risk) and current_sl < entry_price:
-                    new_sl = entry_price + (atr * 0.1) # BE + small buffer
+                    new_sl = entry_price + (atr * 0.1) 
                     modification_reason = "Break-Even (+1R)"
                 
-                # Trigger 2: Dynamic Trailing (Profit > 2.0 * Risk)
+                # Trigger 2: Fractal Trailing (Profit > 2.0 * Risk)
                 elif profit > (2.0 * risk):
-                    potential_sl = current_price - (1.5 * atr)
-                    # Only move UP
-                    if potential_sl > current_sl:
-                        new_sl = potential_sl
-                        modification_reason = "Trailing Stop (1.5 ATR)"
+                    # We want to trail to the LAST SUPPORT FRACTAL
+                    # Check if valid support fractal exists and is ABOVE current SL
+                    if f_sup > current_sl and f_sup < current_price:
+                         new_sl = f_sup - (atr * 0.1) # Buffer below support
+                         modification_reason = "Structure Trail (Fractal)"
 
             elif action == "SELL":
                 profit = entry_price - current_price
@@ -278,33 +241,25 @@ class ExecutionEngine:
                     new_sl = entry_price - (atr * 0.1)
                     modification_reason = "Break-Even (+1R)"
                 
-                # Trigger 2: Trailing
+                # Trigger 2: Fractal Trailing
                 elif profit > (2.0 * risk):
-                    potential_sl = current_price + (1.5 * atr)
-                    # Only move DOWN
-                    if potential_sl < current_sl:
-                        new_sl = potential_sl
-                        modification_reason = "Trailing Stop (1.5 ATR)"
+                     # Trail to LAST RESISTANCE FRACTAL
+                     if f_res > 0 and f_res < current_sl and f_res > current_price:
+                         new_sl = f_res + (atr * 0.1) # Buffer above resistance
+                         modification_reason = "Structure Trail (Fractal)"
 
             # Execute Modification
             if new_sl:
                 # Round to 5 decimals for Forex
                 new_sl = round(new_sl, 5)
                 
-                request = {
-                    "action": mt5.TRADE_ACTION_SLTP,
-                    "position": int(ticket),
-                    "sl": new_sl,
-                    "tp": tp # Keep existing TP
-                }
-                
-                res = mt5.order_send(request)
-                if res.retcode == mt5.TRADE_RETCODE_DONE:
-                    print(f"✅ SL UPDATE ({modification_reason}): Ticket {ticket} -> {new_sl}")
-                    # Update local state so we don't spam requests
-                    # (Note: local state will refresh next loop from file, so this is just for awareness)
+                # Use helper method to respect Mocking/Backtest Mode
+                if self.modify_order_sl(int(ticket), new_sl):
+                     print(f"✅ SL UPDATE ({modification_reason}): Ticket {ticket} -> {new_sl}")
+                     # Update local state so we don't spam requests
+                     # (Note: local state will refresh next loop from file, so this is just for awareness)
                 else:
-                    print(f"⚠️ SL Update Failed: {res.comment}")
+                     print(f"⚠️ SL Update Failed (MT5 Error or connection).")
                     
         except Exception as e:
             print(f"Trailing Stop Error: {e}")
