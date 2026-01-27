@@ -303,7 +303,7 @@ class Sniper(ShadowStrategy):
         self.last_scores = {}
         
     def load_state(self):
-        """Restores evolution history from disk."""
+        """Restores evolution history from disk with MEMORY DECAY."""
         if not os.path.exists(self.state_file):
             return
             
@@ -311,21 +311,52 @@ class Sniper(ShadowStrategy):
             with open(self.state_file, 'r') as f:
                 data = json.load(f)
                 
+            last_save_time = data.get('timestamp', None)
+            decay_factor = 1.0
+            
+            # AGE CHECK: If memory is old (> 4 hours), compress the equity spread.
+            # This prevents yesterday's winner from dominating today's different market.
+            if last_save_time:
+                try:
+                    save_dt = datetime.fromisoformat(last_save_time)
+                    hours_old = (datetime.now() - save_dt).total_seconds() / 3600
+                    if hours_old > 4:
+                        print(f"🧠 Memory is Stale ({hours_old:.1f}h). Applying MEMORY DECAY (50%).")
+                        decay_factor = 0.5
+                except:
+                    pass
+
             for strat in self.strategies:
                 if strat.name in data:
                     s_data = data[strat.name]
-                    strat.phantom_equity = s_data.get('equity', 10000.0)
-                    strat.peak_equity = s_data.get('peak', 10000.0)
-                    strat.max_drawdown = s_data.get('dd', 0.0)
-                    strat.win_streak = s_data.get('wins', 0)
-                    strat.loss_streak = s_data.get('losses', 0)
-            print(f"🧬 Darwin Memory Loaded. Ecosystem restored.")
+                    
+                    # Restore Stats
+                    raw_equity = s_data.get('equity', 10000.0)
+                    
+                    # Apply Decay to PnL (Normalize towards 10k)
+                    pnl = raw_equity - 10000.0
+                    strat.phantom_equity = 10000.0 + (pnl * decay_factor)
+                    
+                    strat.peak_equity = max(10000.0, strat.phantom_equity) # Reset peak to current decoded equity
+                    strat.max_drawdown = s_data.get('dd', 0.0) * decay_factor # Reduce historical DD weight too
+                    
+                    # Reset Streaks on Session Change to allow fresh start
+                    if decay_factor < 1.0:
+                        strat.win_streak = 0
+                        strat.loss_streak = 0
+                    else:
+                        strat.win_streak = s_data.get('wins', 0)
+                        strat.loss_streak = s_data.get('losses', 0)
+                        
+            print(f"🧬 Darwin Memory Loaded. Ecosystem restored (Decay: {decay_factor}).")
         except Exception as e:
             print(f"Darwin Memory Load Error: {e}")
 
     def save_state(self):
         """Persists evolution history to disk."""
-        data = {}
+        data = {
+            'timestamp': datetime.now().isoformat()
+        }
         for strat in self.strategies:
             data[strat.name] = {
                 'equity': strat.phantom_equity,
