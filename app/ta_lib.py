@@ -119,3 +119,34 @@ class TALib:
         stoch_d = stoch_k.rolling(window=d).mean()
         
         return pd.DataFrame({'STOCHk': stoch_k, 'STOCHd': stoch_d})
+
+    @staticmethod
+    def identify_fractals(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Bill Williams Fractals (5-bar pattern).
+        Returns df with 'fractal_high' and 'fractal_low' boolean columns.
+        Note: Fractal is confirmed 2 bars later.
+        """
+        # We need 5 bars window. The "Fractal" is at the center (index i).
+        # Shift -2 means we are looking at future bars relative to i, 
+        # but in realtime we just check if i-2 was a fractal relative to i, i-1, i-3, i-4.
+        
+        # Vectorized implementation for speed
+        # Highs
+        h = df['high']
+        is_up = (h > h.shift(1)) & (h > h.shift(2)) & \
+                (h > h.shift(-1)) & (h > h.shift(-2))
+                
+        # Lows
+        l = df['low']
+        is_down = (l < l.shift(1)) & (l < l.shift(2)) & \
+                  (l < l.shift(-1)) & (l < l.shift(-2))
+                  
+        df['fractal_high'] = is_up
+        df['fractal_low'] = is_down
+        
+        # Fill NA (created by shift) with False
+        df['fractal_high'] = df['fractal_high'].fillna(False)
+        df['fractal_low'] = df['fractal_low'].fillna(False)
+        
+        return df

@@ -208,49 +208,48 @@ class MarketSensor:
         
         return f"{status} {debug_suffix}"
 
-    def detect_patterns(self, df):
+    def get_fractal_structure(self, df):
         """
-        Detects Price Action Patterns (Pinbar, Engulfing).
-        Returns a dictionary of patterns found on the latest candle.
+        Analyzes the last known Fractals to determine Market Structure.
+        Replaces Candlestick Patterns with Geometric Breakouts.
+        Returns: { 'signal': 'BREAK_UP'|'BREAK_DOWN'|'SWEEP_UP'|'SWEEP_DOWN'|'NONE', 'level': float }
         """
+        # 1. Identify Fractals
+        df = TALib.identify_fractals(df)
         latest = df.iloc[-1]
-        prev = df.iloc[-2]
-        patterns = []
+        current_close = latest['close']
         
-        # 1. Engulfing
-        # Body size
-        lat_body = abs(latest['close'] - latest['open'])
-        prev_body = abs(prev['close'] - prev['open'])
+        # Find the most recent VALID Confirm Fractals (ignoring the last 2 bars which can't be fractals yet)
+        # We slice [:-2] to be safe as fractal needs 2 future bars to confirm.
+        valid_history = df.iloc[:-2]
         
-        # Bullish Engulfing
-        if (prev['close'] < prev['open']) and \
-           (latest['close'] > latest['open']) and \
-           (latest['close'] > prev['open']) and \
-           (latest['open'] < prev['close']):
-               patterns.append("BULLISH_ENGULFING")
-               
-        # Bearish Engulfing
-        elif (prev['close'] > prev['open']) and \
-             (latest['close'] < latest['open']) and \
-             (latest['close'] < prev['open']) and \
-             (latest['open'] > prev['close']):
-                patterns.append("BEARISH_ENGULFING")
+        last_up_fractal = valid_history[valid_history['fractal_high']].iloc[-1] if any(valid_history['fractal_high']) else None
+        last_down_fractal = valid_history[valid_history['fractal_low']].iloc[-1] if any(valid_history['fractal_low']) else None
+        
+        signal = "NONE"
+        level = 0.0
+        
+        # CHECK BREAKOUTS (Trend Mode)
+        # Price CLOSES above the last Fractal High -> Bullish Breakout
+        if last_up_fractal is not None:
+            res_level = last_up_fractal['high']
+            if current_close > res_level and df.iloc[-2]['close'] <= res_level: # Fresh Break
+                signal = "BREAK_UP"
+                level = res_level
 
-        # 2. Pinbar (Hammer / Shooting Star)
-        # Wick calculation
-        lat_range = latest['high'] - latest['low']
-        upper_wick = latest['high'] - max(latest['close'], latest['open'])
-        lower_wick = min(latest['close'], latest['open']) - latest['low']
+        # Price CLOSES below the last Fractal Low -> Bearish Breakout
+        if last_down_fractal is not None:
+             sup_level = last_down_fractal['low']
+             if current_close < sup_level and df.iloc[-2]['close'] >= sup_level: # Fresh Break
+                 signal = "BREAK_DOWN"
+                 level = sup_level
+                 
+        # CHECK SWEEPS (Range Mode - Advanced)
+        # Sweep = Hit Level but Close Inside (This requires looking at High/Low vs Close)
+        # For simplicity, we just return the Breakout Signal for now, 
+        # and let the Logic Engine decide if it's a Break (Trend) or Fakeout (Range) based on Hurst.
         
-        if lat_range > 0:
-            # Hammer (Bullish Pinbar) - Long Lower Wick
-            if (lower_wick > (lat_body * 2)) and (upper_wick < (lat_body * 0.5)):
-                patterns.append("BULLISH_PINBAR")
-            # Star (Bearish Pinbar) - Long Upper Wick
-            elif (upper_wick > (lat_body * 2)) and (lower_wick < (lat_body * 0.5)):
-                patterns.append("BEARISH_PINBAR")
-        
-        return patterns
+        return signal, level
 
 
 

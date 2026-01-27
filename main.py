@@ -327,16 +327,17 @@ Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
                              decision["reasoning_summary"] = f"💤 Chaos Guard: Market is too random (Entropy {current_entropy:.2f})."
                              run_ai = False
 
-                        # 100% EFFICIENCY: ADVANCED GATEKEEPER 4.0 (STRUCTURE FIRST)
+                        # 100% EFFICIENCY: ADVANCED GATEKEEPER 5.0 (FRACTAL GEOMETRY)
                         
-                        # A. DETECT STRUCTURE (SMC OR CANDLES)
-                        # Rule: We NEVER trade without structure. Indicators are secondary.
+                        # A. DETECT STRUCTURE (FRACTALS)
+                        # Replaced Candlesticks with Bill Williams Fractals
+                        fractal_signal, fractal_level = sensor.get_fractal_structure(df)
+                        has_fractal_event = fractal_signal != "NONE"
+                        
                         in_ob_zone = "[INSIDE_ZONE (READY)]" in market_summary
-                        patterns = sensor.detect_patterns(df)
-                        pattern_str = ", ".join(patterns) if patterns else "NONE"
-                        has_price_structure = len(patterns) > 0 or in_ob_zone
+                        has_price_structure = has_fractal_event or in_ob_zone
                         
-                        # B. FETCH CONDITIONAL METRICS
+                        # B. FETCH METRICS
                         hurst = bif_stats.get('hurst', 0.5)
                         is_trending = hurst > 0.55
                         is_ranging = hurst < 0.45
@@ -350,41 +351,40 @@ Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
                         if not has_price_structure:
                              # IF Indicators are aligned ONLY, we BLOCK IT.
                              if is_confluent:
-                                 print(f"🛑 BLOCKED: Good Indicators ({conf_reason}) but NO STRUCTURE (No Pattern/OB).")
+                                 print(f"🛑 BLOCKED: Good Indicators ({conf_reason}) but NO STRUCTURE (No Fractal Break/OB).")
                              else:
-                                 pass # Just normal noise
+                                 pass 
                         
                         else:
-                            # We have Structure. Now check Regime/Confirmation.
-                            
                             # Scenario A: SMC (The Golden Setup)
                             if in_ob_zone:
                                 is_valid_setup = True
                                 setup_reason = "[SMC ORDER BLOCK]"
                             
-                            # Scenario B: Trend Regime (Structure + Trend Indicators)
-                            elif is_trending and has_price_structure:
-                                if is_confluent: # Indicators Confirming Structure
-                                    is_valid_setup = True
-                                    setup_reason = f"[TREND STRUCTURE] {pattern_str} + {conf_reason}"
+                            # Scenario B: Trend Regime (Fractal Breakout)
+                            elif is_trending and has_fractal_event:
+                                if is_confluent:
+                                    if fractal_signal == "BREAK_UP" and "BULLISH" in conf_reason:
+                                         is_valid_setup = True
+                                         setup_reason = f"[TREND BREAKOUT] Fractal Break {fractal_level} + {conf_reason}"
+                                    elif fractal_signal == "BREAK_DOWN" and "BEARISH" in conf_reason:
+                                         is_valid_setup = True
+                                         setup_reason = f"[TREND BREAKOUT] Fractal Break {fractal_level} + {conf_reason}"
+                                    else:
+                                        print(f"⚠️ Fractal {fractal_signal} contradicts Indicators ({conf_reason}). Waiting.")
                                 else:
-                                    print(f"⚠️ Trend Pattern ({pattern_str}) found, but Indicators Bad. Waiting.")
+                                    print(f"⚠️ Fractal Break ({fractal_signal}) but Indicators not ready. Waiting.")
                             
-                            # Scenario C: Range Regime (Structure + Extremes)
-                            elif is_ranging and has_price_structure:
-                                rsi = latest_indicators.get('rsi', 50)
-                                is_extreme = rsi > 70 or rsi < 30
-                                if is_extreme: # Extremes Confirming Structure
-                                    is_valid_setup = True
-                                    setup_reason = f"[RANGE STRUCTURE] {pattern_str} + RSI Extreme"
-                                else:
-                                     print(f"⚠️ Range Pattern ({pattern_str}) found, but RSI Normal. Waiting.")
+                            # Scenario C: Range Regime (Block Breakouts)
+                            elif is_ranging and has_fractal_event:
+                                 print(f"🛑 BLOCKED: Fractal Breakout ({fractal_signal}) in Range Regime (H={hurst:.2f}). Waiting for Mean Reversion.")
 
                         # Smart Filter Enforcer
                         if Config.SMART_FILTER and not is_valid_setup:
                             if not is_exciting: 
-                                 print(f"💤 Gatekeeper: Waiting for Structure + Confirmation. (Pat: {pattern_str}).")
-                                 decision["reasoning_summary"] = f"💤 Gatekeeper: No High-Qual Setup. Hurst={hurst:.2f}. Pattern={pattern_str}."
+                                 current_sig = fractal_signal if has_fractal_event else "None"
+                                 print(f"💤 Gatekeeper: Waiting for valid Structure. (Fractal: {current_sig}).")
+                                 decision["reasoning_summary"] = f"💤 Gatekeeper: No Setup. Regime={ 'Trend' if is_trending else 'Range' }. Struct={current_sig}."
                                  run_ai = False
                                  last_ai_scan = time.time() 
                         
