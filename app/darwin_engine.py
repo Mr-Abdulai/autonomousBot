@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import os
+import json
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from app.config import Config
@@ -264,9 +266,9 @@ class Sniper(ShadowStrategy):
                  
          return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "H1 Alignment Fail"}
 
-class DarwinEngine:
     def __init__(self):
         self.strategies = []
+        self.state_file = os.path.join(Config.BASE_DIR, "darwin_state.json")
         
         # === PROJECT HYDRA: GENERATE SWARM ===
         
@@ -294,9 +296,54 @@ class DarwinEngine:
         # 3. Sniper (The Lone Wolf - Always Bundled for now)
         self.strategies.append(Sniper("Sniper_Elite", direction='BOTH'))
         
+        # LOAD BRAIN MEMORY
+        self.load_state()
+        
         self.leader = self.strategies[0]
         self.last_scores = {}
         
+    def load_state(self):
+        """Restores evolution history from disk."""
+        if not os.path.exists(self.state_file):
+            return
+            
+        try:
+            with open(self.state_file, 'r') as f:
+                data = json.load(f)
+                
+            for strat in self.strategies:
+                if strat.name in data:
+                    s_data = data[strat.name]
+                    strat.phantom_equity = s_data.get('equity', 10000.0)
+                    strat.peak_equity = s_data.get('peak', 10000.0)
+                    strat.max_drawdown = s_data.get('dd', 0.0)
+                    strat.win_streak = s_data.get('wins', 0)
+                    strat.loss_streak = s_data.get('losses', 0)
+            print(f"🧬 Darwin Memory Loaded. Ecosystem restored.")
+        except Exception as e:
+            print(f"Darwin Memory Load Error: {e}")
+
+    def save_state(self):
+        """Persists evolution history to disk."""
+        data = {}
+        for strat in self.strategies:
+            data[strat.name] = {
+                'equity': strat.phantom_equity,
+                'peak': strat.peak_equity,
+                'dd': strat.max_drawdown,
+                'wins': strat.win_streak,
+                'losses': strat.loss_streak
+            }
+        
+        try:
+            # Atomic write
+            temp = self.state_file + ".tmp"
+            with open(temp, 'w') as f:
+                json.dump(data, f, indent=4)
+            os.replace(temp, self.state_file)
+        except Exception as e:
+            print(f"Darwin Save Error: {e}")
+
     def update(self, df: pd.DataFrame, indicators: dict, mtf_data: dict):
         current_price = df.iloc[-1]['close']
         regime_context = mtf_data.get('analysis', {}) 
@@ -317,6 +364,9 @@ class DarwinEngine:
         self.strategies.sort(key=lambda s: s.get_quality_score(regime_context), reverse=True)
         self.leader = self.strategies[0]
         self.last_scores = {s.name: s.get_quality_score(regime_context) for s in self.strategies}
+        
+        # 4. Save Memory
+        self.save_state()
         
     def get_alpha_signal(self, df, indicators, mtf_data) -> dict:
         best_strat_name = self.leader.name
