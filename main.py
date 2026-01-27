@@ -327,53 +327,64 @@ Rec. Strategy: {'FOLLOW TREND' if bif_stats['hurst'] > 0.55 else 'WAIT / FADE'}
                              decision["reasoning_summary"] = f"💤 Chaos Guard: Market is too random (Entropy {current_entropy:.2f})."
                              run_ai = False
 
-                        # 100% EFFICIENCY: ADVANCED GATEKEEPER 4.0 (REGIME + PATTERN)
+                        # 100% EFFICIENCY: ADVANCED GATEKEEPER 4.0 (STRUCTURE FIRST)
                         
-                        # 1. SMC Order Block (The Golden Setup)
-                        in_zone = "[INSIDE_ZONE (READY)]" in market_summary
-                        
-                        # 2. Advanced Technicals (Must be context-aware)
-                        # Fetch Candlestick Patterns
+                        # A. DETECT STRUCTURE (SMC OR CANDLES)
+                        # Rule: We NEVER trade without structure. Indicators are secondary.
+                        in_ob_zone = "[INSIDE_ZONE (READY)]" in market_summary
                         patterns = sensor.detect_patterns(df)
-                        has_pattern = len(patterns) > 0
                         pattern_str = ", ".join(patterns) if patterns else "NONE"
+                        has_price_structure = len(patterns) > 0 or in_ob_zone
                         
-                        # Determine Regime Strictness
+                        # B. FETCH CONDITIONAL METRICS
                         hurst = bif_stats.get('hurst', 0.5)
                         is_trending = hurst > 0.55
                         is_ranging = hurst < 0.45
+                        is_confluent, conf_reason = sensor.check_technical_confluence()
                         
                         is_valid_setup = False
                         setup_reason = ""
 
                         # --- LOGIC BRANCHING ---
-                        # A. SMC (Always Valid)
-                        if in_zone:
-                            is_valid_setup = True
-                            setup_reason = "[SMC ORDER BLOCK]"
+                        # 1. Structure Check (The Hard Filter)
+                        if not has_price_structure:
+                             # IF Indicators are aligned ONLY, we BLOCK IT.
+                             if is_confluent:
+                                 print(f"🛑 BLOCKED: Good Indicators ({conf_reason}) but NO STRUCTURE (No Pattern/OB).")
+                             else:
+                                 pass # Just normal noise
                         
-                        # B. TREND REGIME (Follow Trend)
-                        elif is_trending:
-                            # Valid if: Tech Confluence + (Pattern OR Pullback)
-                            is_confluent, conf_reason = sensor.check_technical_confluence()
-                            if is_confluent and has_pattern:
+                        else:
+                            # We have Structure. Now check Regime/Confirmation.
+                            
+                            # Scenario A: SMC (The Golden Setup)
+                            if in_ob_zone:
                                 is_valid_setup = True
-                                setup_reason = f"[TREND PULLBACK] {pattern_str} + {conf_reason}"
-                        
-                        # C. RANGE REGIME (Mean Reversion)
-                        elif is_ranging:
-                            # Valid if: RSI Extreme + Reversal Pattern (Pinbar/Engulfing)
-                            rsi = latest_indicators.get('rsi', 50)
-                            is_extreme = rsi > 70 or rsi < 30
-                            if is_extreme and has_pattern:
-                                is_valid_setup = True
-                                setup_reason = f"[RANGE REVERSAL] {pattern_str} + RSI Extreme. (Hurst {hurst:.2f})"
+                                setup_reason = "[SMC ORDER BLOCK]"
+                            
+                            # Scenario B: Trend Regime (Structure + Trend Indicators)
+                            elif is_trending and has_price_structure:
+                                if is_confluent: # Indicators Confirming Structure
+                                    is_valid_setup = True
+                                    setup_reason = f"[TREND STRUCTURE] {pattern_str} + {conf_reason}"
+                                else:
+                                    print(f"⚠️ Trend Pattern ({pattern_str}) found, but Indicators Bad. Waiting.")
+                            
+                            # Scenario C: Range Regime (Structure + Extremes)
+                            elif is_ranging and has_price_structure:
+                                rsi = latest_indicators.get('rsi', 50)
+                                is_extreme = rsi > 70 or rsi < 30
+                                if is_extreme: # Extremes Confirming Structure
+                                    is_valid_setup = True
+                                    setup_reason = f"[RANGE STRUCTURE] {pattern_str} + RSI Extreme"
+                                else:
+                                     print(f"⚠️ Range Pattern ({pattern_str}) found, but RSI Normal. Waiting.")
 
                         # Smart Filter Enforcer
                         if Config.SMART_FILTER and not is_valid_setup:
-                            if not is_exciting: # Allow pure News excitement to bypass? Maybe not.
-                                 print(f"💤 Gatekeeper: No Valid Setup for Regime. (Pattern: {pattern_str}). Saving Tokens.")
-                                 decision["reasoning_summary"] = f"💤 Gatekeeper: No Setup. Regime={ 'Trend' if is_trending else 'Range' }. Pattern={pattern_str}."
+                            if not is_exciting: 
+                                 print(f"💤 Gatekeeper: Waiting for Structure + Confirmation. (Pat: {pattern_str}).")
+                                 decision["reasoning_summary"] = f"💤 Gatekeeper: No High-Qual Setup. Hurst={hurst:.2f}. Pattern={pattern_str}."
                                  run_ai = False
                                  last_ai_scan = time.time() 
                         
