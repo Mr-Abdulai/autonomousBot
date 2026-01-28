@@ -222,18 +222,53 @@ Current Leader: {darwin.leader.name}
             if decision['action'] in ["BUY", "SELL"]:
                 # Position Sizing
                 atr = df.iloc[-1]['ATR_14']
-                sl_mult = decision.get("stop_loss_atr_multiplier", 1.5)
                 
-                if decision['action'] == "BUY":
-                    sl_price = current_price - (atr * sl_mult)
-                    tp_price = current_price + ((current_price - sl_price) * 2.0)
+                # Check for Scout Protocol (Counter-Trend)
+                is_scout = False
+                if 'darwin_signal' in locals() and darwin_signal.get('scout_mode', False):
+                    is_scout = True
+                    print("⚔️ EXECUTING SCOUT PROTOCOL: Counter-Trend Entry! Validating Fractal Stops...")
+
+                if is_scout:
+                    # SCOUT LOGIC: Tight Stop at Recent Fractal, Aggressive TP (1:3) to catch the move
+                    if decision['action'] == "BUY":
+                        # SL below recent Fractal Low
+                        sl_price = fractal_levels.get('fractal_low', current_price - atr)
+                        # Sanity: If fractal is too far or invalid, use tight ATR
+                        if sl_price >= current_price or (current_price - sl_price) > (3*atr):
+                             sl_price = current_price - (atr * 1.0)
+                             
+                        risk = current_price - sl_price
+                        tp_price = current_price + (risk * 3.0) # Aim for big reversal/correction
+                        
+                    else: # SELL
+                        # SL above recent Fractal High
+                        sl_price = fractal_levels.get('fractal_high', current_price + atr)
+                        if sl_price <= current_price or (sl_price - current_price) > (3*atr):
+                             sl_price = current_price + (atr * 1.0)
+                             
+                        risk = sl_price - current_price
+                        tp_price = current_price - (risk * 3.0)
+                
                 else:
-                    sl_price = current_price + (atr * sl_mult)
-                    tp_price = current_price - ((sl_price - current_price) * 2.0)
+                    # STANDARD LOGIC
+                    sl_mult = decision.get("stop_loss_atr_multiplier", 1.5)
+                    if decision['action'] == "BUY":
+                        sl_price = current_price - (atr * sl_mult)
+                        tp_price = current_price + ((current_price - sl_price) * 2.0)
+                    else:
+                        sl_price = current_price + (atr * sl_mult)
+                        tp_price = current_price - ((sl_price - current_price) * 2.0)
 
                 risk_distance = abs(current_price - sl_price)
                 if risk_distance > 0:
                     units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
+                    
+                    # SCOUT SAFETY: Half Risk
+                    if is_scout:
+                        units = units * 0.5 
+                        print(f"🛡️ Scout Risk Applied: Units HALVED to {units:.2f}")
+
                     if units > 0:
                         executor.execute_trade(decision['action'], sl_price, tp_price, units)
             

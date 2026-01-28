@@ -469,10 +469,62 @@ class DarwinEngine:
         self.save_state()
         
     def get_alpha_signal(self, df, indicators, mtf_data) -> dict:
-        best_strat_name = self.leader.name
-        signal = self.leader.generate_signal(df, indicators, mtf_data)
-        signal['source'] = f"DarwinLeader::{best_strat_name}"
-        signal['darwin_score'] = self.last_scores.get(best_strat_name, 0)
+        """
+        Retrieves signal from the active leader.
+        Supports 'Allowed Strategies' filter from BIF Brain (Scout Protocol).
+        """
+        # 1. Get Restrictions
+        bif_analysis = mtf_data.get('analysis', {})
+        allowed = bif_analysis.get('allowed_strategies', ['ALL'])
+        
+        # 2. Select Strategy
+        selected_strat = self.leader # Default to Global Leader
+        
+        if 'ALL' not in allowed:
+            # We are in restricted mode (e.g. Scout Protocol)
+            # Find the highest scoring strategy that matches the allow list
+            found = False
+            for strat in self.strategies:
+                # Check match (e.g. "MeanReverter_LONG" in allowed matches "MeanRev_LONG_2.0SD")
+                # Need to be careful with naming conventions.
+                # Convention:
+                # BIF Output: "MeanReverter_LONG", "RSI_Matrix_LONG"
+                # Strat Names: "MeanRev_LONG_...", "RSI_Matrix_LONG_..."
+                
+                # Normalize for matching
+                is_match = False
+                for allow_tag in allowed:
+                    # Map BIF tag to Strat Name substring
+                    tag_map = {
+                        "MeanReverter_LONG": "MeanRev_LONG",
+                        "MeanReverter_SHORT": "MeanRev_SHORT",
+                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
+                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
+                        "TrendHawk_LONG": "TrendHawk_LONG",
+                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                    }
+                    search_term = tag_map.get(allow_tag, allow_tag)
+                    if search_term in strat.name:
+                        is_match = True
+                        break
+                
+                if is_match:
+                    selected_strat = strat
+                    found = True
+                    break
+            
+            if not found:
+                return {'action': 'HOLD', 'reason': 'No strategies fit Regime Restrictions'}
+
+        # 3. Generate Signal
+        signal = selected_strat.generate_signal(df, indicators, mtf_data)
+        signal['source'] = f"Darwin::{selected_strat.name}"
+        signal['darwin_score'] = self.last_scores.get(selected_strat.name, 0)
+        
+        # 4. Inject Scout Metadata if restricted
+        if 'ALL' not in allowed:
+            signal['scout_mode'] = True
+            
         return signal
 
     def get_leaderboard(self) -> str:

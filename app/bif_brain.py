@@ -104,50 +104,65 @@ class BIFBrain:
         h1_hurst = results.get('H1', {}).get('hurst', 0.5)
         h4_hurst = results.get('H4', {}).get('hurst', 0.5)
         
-        # Calculate Trend Bias for Darwin Engine
-        trend_status = "RANGING"
-        
-        # Simple Moving Average Logic (using the last close available in the DFs)
-        # We need to know if we are generally UP or DOWN to bias the swarm.
-        # Let's use H1 EMA slope or price vs EMA.
-        
-        h1_df = data_dict.get('H1')
-        if h1_df is not None and len(h1_df) > 50:
-            h1_close = h1_df['close'].iloc[-1]
-            h1_ema50 = h1_df['close'].ewm(span=50).mean().iloc[-1]
-            if h1_close > h1_ema50:
-                trend_status = "BULLISH"
-            elif h1_close < h1_ema50:
-                trend_status = "BEARISH"
-        
-        # Base Score from M15
-        if m15_hurst > 0.55: # M15 Trending
-            # Check H1 Permission
-            if h1_hurst > 0.5:
-                alignment_score += 0.5 # H1 Supports Trend
-                
-                # Check H4 Bonus
-                if h4_hurst > 0.5:
-                    alignment_score += 0.5 # H4 Supports Trend
-                elif h4_hurst < 0.45:
-                     alignment_score -= 0.2 # H4 Mean Reverting (Headwind)
+        # Calculate Trends (Price vs EMA50)
+        trends = {}
+        for tf in ['M15', 'H1', 'H4']:
+            _df = data_dict.get(tf)
+            if _df is not None and len(_df) > 50:
+                close = _df['close'].iloc[-1]
+                ema = _df['close'].ewm(span=50).mean().iloc[-1]
+                trends[tf] = "BULLISH" if close > ema else "BEARISH"
             else:
-                # H1 is Mean Reverting (Blocking M15 Trend)
-                alignment_score -= 1.0 # VETO
-                
-        elif m15_hurst < 0.45: # M15 Mean Reverting
-            # Range Trading on M15 is risky unless H1 is also Ranging
-            if h1_hurst < 0.5:
-                alignment_score += 0.5
-            else:
-                alignment_score -= 0.5 # H1 Trending (Dangerous to fade)
-                trend_status = "RANGING" # Force range even if EMA says trend, because hurst says chop
+                trends[tf] = "NEUTRAL"
+
+        m15_trend = trends['M15']
+        h4_trend = trends['H4']
+        
+        # Base Logic
+        scout_mode = False
+        allowed_strategies = {"ALL"} # Default
+        
+        # 1. PERFECT ALIGNMENT (The Easy Trade)
+        if m15_trend == h4_trend and m15_hurst > 0.55:
+            alignment_score = 1.0
+            allowed_strategies = {"ALL"} # Full attack
+            
+        # 2. THE SCOUT PROTOCOL (Tactical Counter-Trend)
+        # H4 is Bullish, but M15 is crashing (Bearish + High Hurst)
+        # We want to buy the dip.
+        elif h4_trend == "BULLISH" and m15_trend == "BEARISH" and m15_hurst > 0.60:
+            alignment_score = 0.5 # Valid, but cautious
+            scout_mode = True
+            allowed_strategies = {"MeanReverter_LONG", "RSI_Matrix_LONG"} # Only buy dips
+            trend_status = "BULLISH_PULLBACK"
+            
+        # H4 is Bearish, but M15 is pumping (Bullish + High Hurst)
+        # We want to sell the rally.
+        elif h4_trend == "BEARISH" and m15_trend == "BULLISH" and m15_hurst > 0.60:
+            alignment_score = 0.5
+            scout_mode = True
+            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT"} # Only sell rallies
+            trend_status = "BEARISH_PULLBACK"
+
+        # 3. CHOPPY MARKET (Range)
+        elif m15_hurst < 0.45:
+             alignment_score = 0.5
+             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
+             trend_status = "RANGING"
+             
+        # 4. MISMATCH / DANGEROUS / LOW ENTROPY BIAS
+        else:
+             alignment_score = -0.5 # Default Block
+             allowed_strategies = set()
+             trend_status = f"CONFUSED ({m15_trend}/{h4_trend})"
 
         return {
              "mtf_stats": results,
-             "alignment_score": alignment_score, # > 0.5 means Safe to Trade
-             "trend": trend_status, # NEW: For Directional Boosting
-             "summary": f"M15_H:{m15_hurst} | H1_H:{h1_hurst} | Score:{alignment_score} | Trend:{trend_status}"
+             "alignment_score": alignment_score, 
+             "trend": trend_status,
+             "scout_mode": scout_mode,
+             "allowed_strategies": list(allowed_strategies),
+             "summary": f"M15:{m15_trend} | H4:{h4_trend} | Scout:{scout_mode}"
         }
 
     def _calculate_entropy(self, data: np.ndarray, bins: int = 20) -> float:
