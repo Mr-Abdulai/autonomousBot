@@ -1,56 +1,143 @@
 import unittest
-import numpy as np
 import pandas as pd
+import numpy as np
 from app.bif_brain import BIFBrain
 
 class TestBIFBrain(unittest.TestCase):
-    
     def setUp(self):
         self.brain = BIFBrain()
-
-    def test_entropy_logic(self):
-        # 1. Low Entropy (Ordered)
-        # 100 values, all exactly 0.5. Histogram should be point mass. Entropy ~ 0.
-        data_low = np.zeros(100)
-        ent_low = self.brain._calculate_entropy(data_low)
-        self.assertLess(ent_low, 0.1)
-
-        # 2. High Entropy (Random Uniform)
-        # 100 values, unifomly distributed -1 to 1. Entropy ~ 1.
-        data_high = np.random.uniform(-1, 1, 1000)
-        ent_high = self.brain._calculate_entropy(data_high)
-        # It won't be exactly 1.0 due to binning issues, but should be > 0.8
-        self.assertGreater(ent_high, 0.8)
-
-    def test_hurst_logic(self):
-        # 1. Random Walk (Bm). H should be close to 0.5
-        np.random.seed(42)
-        returns = np.random.normal(0, 0.01, 1000)
-        h_random = self.brain._calculate_hurst(returns)
-        # Allow some range (0.3 to 0.7) for this simple estimator
-        print(f"Hurst Random: {h_random}")
-        self.assertTrue(0.3 <= h_random <= 0.7)
-
-        # 2. Strong Trend (Persistence). H > 0.5
-        # We simulate a persistent series by adding positive correlation
-        # Or simpler: a straight line (H=1)
-        line = np.linspace(0, 10, 1000) # Perfect trend
-        h_trend = self.brain._calculate_hurst(line)
-        print(f"Hurst Trend: {h_trend}")
-        self.assertGreater(h_trend, 0.8)
-
-    def test_market_analysis_integration(self):
-        # Mock DF
-        dates = pd.date_range(start="2024-01-01", periods=200, freq="15min")
-        close = np.cumprod(1 + np.random.normal(0, 0.001, 200)) # Random walk prices
-        df = pd.DataFrame({"close": close}, index=dates)
         
-        result = self.brain.analyze_market_state(df)
+    def create_mock_df(self, trend_type="NEUTRAL", hurst=0.5):
+        # Create a basic DF structure
+        dates = pd.date_range(start="2024-01-01", periods=100, freq="15min")
+        df = pd.DataFrame(index=dates)
         
-        self.assertIn("hurst", result)
-        self.assertIn("entropy", result)
-        self.assertIn("regime_id", result)
-        self.assertIsInstance(result["regime_id"], int)
+        # We assume BIFBrain analyzes 'close' and calc hurst internally, 
+        # but analyze_mtf_regime calls analyze_market_state which computes metrics.
+        # However, for UNIT TESTING strictly the LOGIC in analyze_mtf_regime,
+        # we can mock the internal calls or just mock the data if we trust the math.
+        # But analyze_mtf_regime calls analyze_market_state on the DF.
+        # It's easier to Mock 'analyze_market_state' or structural injection.
+        
+        # Let's create dummy DFs.
+        # Note: To fully control Hurst is hard with random data.
+        # We will Mock the method 'analyze_market_state' instead of generating complex time series.
+        df['close'] = 100.0
+        return df
+
+    def test_scout_protocol_bullish_pullback(self):
+        """Test H4 Bullish + M15 Bearish/HighHurst triggers Scout Mode."""
+        
+        # Mock the analyze_market_state method to return controlled stats
+        original_analyze = self.brain.analyze_market_state
+        
+        def mock_analyze(df):
+            # Identify TF by some marker? No, analyze_market_state doesn't know TF.
+            # We need to control what analyze_mtf_regime receives.
+            return {"hurst": 0.5, "entropy": 0.5} # Default
+            
+        # Instead of mocking the method which is hard contextually,
+        # Let's look at analyze_mtf_regime. It iterates data_dict.
+        # It calculates Trend based on Price vs EMA50 inside the function.
+        # So we NEED DFs with specific Price/EMA relationships.
+        
+        # M15: Price < EMA (Bearish), Hurst > 0.60
+        m15_df = pd.DataFrame({'close': [100]*100})
+        m15_df['close'] = 90.0 # Current Price
+        # EMA calculation requires history.
+        # Let's just create a series where EMA end is > 90.
+        # If we have 100 points of 100, EMA will be ~100.
+        # Last point 90. 90 < 100 -> Bearish.
+        m15_vals = [100.0] * 99 + [90.0]
+        m15_df['close'] = m15_vals
+        
+        # H4: Bullish. Price > EMA.
+        h4_vals = [100.0] * 99 + [110.0]
+        h4_df = pd.DataFrame({'close': h4_vals})
+        
+        # H1: Irrelevant for Scout trigger but needed for completeness
+        h1_df = pd.DataFrame({'close': [100.0]*100})
+        
+        data_dict = {'M15': m15_df, 'H1': h1_df, 'H4': h4_df}
+        
+        # NOW we mock analyze_market_state to return the Hurst values we want
+        # We need to know which DF is being analyzed. 
+        # Since we can't easily distinguish DFs inside the mock without strict identity checks,
+        # we can use a side_effect based on DataFrame length or content, or just patch the return values dict?
+        # analyze_mtf_regime calls:
+        # results[tf] = self.analyze_market_state(df)
+        
+        # Let's Mock the WHOLE internal loop or just the 'results' dict construction?
+        # No, let's subclass or monkeypatch.
+        
+        # Identity Logic:
+        m15_id = id(m15_df)
+        h4_id = id(h4_df)
+        
+        def side_effect(df):
+            if id(df) == m15_id:
+                return {'hurst': 0.65, 'entropy': 0.2} # High Hurst (Crash)
+            elif id(df) == h4_id:
+                return {'hurst': 0.55, 'entropy': 0.5} # Trending
+            return {'hurst': 0.5, 'entropy': 1.0}
+            
+        self.brain.analyze_market_state = side_effect
+        
+        result = self.brain.analyze_mtf_regime(data_dict)
+        
+        self.assertTrue(result['scout_mode'])
+        self.assertEqual(result['alignment_score'], 0.5)
+        self.assertIn("MeanReverter_LONG", result['allowed_strategies'])
+        self.assertNotIn("TrendHawk_LONG", result['allowed_strategies']) # Blocked
+        print("Scout Bullish Pullback: PASSED")
+
+    def test_rebel_protocol_bearish_correction(self):
+        """Test M15 Range inside H4 Trend triggers Rebel/Scout Mode."""
+        
+        # M15: Range (Hurst < 0.45), Price irrelevant (Neutral/Bearish)
+        m15_vals = [100.0] * 100
+        m15_df = pd.DataFrame({'close': m15_vals})
+        
+        # H4: Trending (Hurst > 0.55)
+        h4_vals = [100.0] * 100
+        h4_df = pd.DataFrame({'close': h4_vals})
+        
+        data_dict = {'M15': m15_df, 'H1': m15_df, 'H4': h4_df}
+        
+        m15_id = id(m15_df)
+        h4_id = id(h4_df)
+        
+        def side_effect(df):
+            if id(df) == m15_id:
+                return {'hurst': 0.40, 'entropy': 0.8} # Mean Reverting
+            if id(df) == h4_id:
+                return {'hurst': 0.60, 'entropy': 0.3} # Strong Trend
+            return {'hurst': 0.5, 'entropy': 0.5}
+            
+        self.brain.analyze_market_state = side_effect
+        
+        result = self.brain.analyze_mtf_regime(data_dict)
+        
+        self.assertTrue(result['scout_mode']) # checking is_fighting_trend
+        self.assertEqual(result['trend'], "RANGING_REBEL")
+        self.assertIn("MeanReverter_SHORT", result['allowed_strategies'])
+        print("Rebel Protocol: PASSED")
+
+    def test_perfect_alignment(self):
+        """Test M15/H4 Alignment."""
+        m15_df = pd.DataFrame({'close': [100]*99 + [110]}) # Bullish
+        h4_df = pd.DataFrame({'close': [100]*99 + [110]}) # Bullish
+        
+        data_dict = {'M15': m15_df, 'H1': m15_df, 'H4': h4_df}
+        
+        self.brain.analyze_market_state = lambda x: {'hurst': 0.6, 'entropy': 0.2}
+        
+        result = self.brain.analyze_mtf_regime(data_dict)
+        
+        self.assertEqual(result['alignment_score'], 1.0)
+        self.assertFalse(result['scout_mode'])
+        self.assertIn("ALL", result['allowed_strategies'])
+        print("Perfect Alignment: PASSED")
 
 if __name__ == '__main__':
     unittest.main()

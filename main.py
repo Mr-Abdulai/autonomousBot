@@ -109,6 +109,32 @@ def main():
             
             risk_manager.update_account_state(account_info['equity'])
             
+            # --- NEWS RADAR (Phase 60) ---
+            # Check for News Triggers every 5 minutes (to avoid IP bans)
+            if 'last_news_check' not in locals(): locals()['last_news_check'] = datetime.now() - timedelta(minutes=10)
+            
+            news_signal = None
+            if (datetime.now() - locals()['last_news_check']).total_seconds() > 300:
+                print("📡 Scanning News Radar...")
+                locals()['last_news_check'] = datetime.now()
+                
+                # We need to access the Harvester directly or add a method to Sensor
+                # Sensor checks news in get_market_summary but doesn't return the event object.
+                # Let's access sensor.news directly.
+                event = sensor.news.fetch_latest_trigger()
+                
+                if event:
+                    print(f"🚨 NEWS TRIGGER DETECTED: {event['currency']} {event['event']} (Act: {event['actual']} vs Fcst: {event['forecast']})")
+                    # Quick Trend Check for Context
+                    trend_m15 = sensor.get_trend_data(Config.TIMEFRAME)
+                    
+                    # AI Analysis
+                    news_decision = ai_strategist.analyze_news_impact(event, trend_m15)
+                    
+                    if news_decision['action'] in ['BUY', 'SELL']:
+                        print(f"🗞️ NEWS TRADING SIGNAL: {news_decision['action']} ({news_decision['reasoning']})")
+                        news_signal = news_decision
+                        
             # A. SENSE
             df = sensor.get_market_data(n_candles=500)
             current_price = df.iloc[-1]['close']
@@ -165,18 +191,31 @@ Current Leader: {darwin.leader.name}
             run_ai = True
             decision = {"action": "WAIT", "confidence_score": 0.0, "reasoning_summary": "Scanning..."}
             
+            # --- NEWS OVERRIDE ---
+            if news_signal:
+                print("⚡ NEWS INTERVENTION: Skipping Technical Gates.")
+                decision = news_signal
+                decision['confidence_score'] = 1.0 # Max Confidence
+                decision['stop_loss_atr_multiplier'] = 2.0 # Volatility Buffer
+                run_ai = False # Skip Standard AI
+            
             # Gate 0: Time Guard
             if not time_manager.is_market_open():
                  decision['reasoning_summary'] = f"Time Guard: {time_manager.get_session_status()}"
                  run_ai = False
+                 # Note: News might happen pre-market? Unlikely for major pairs usually inside session, but be careful.
             
-            # Gate 1: Spread Guard
-            if run_ai and not risk_manager.validate_spread(latest_indicators.get('spread', 0)):
+            # Gate 1: Spread Guard (Critical during News)
+            if (run_ai or news_signal) and not risk_manager.validate_spread(latest_indicators.get('spread', 0)):
                  decision['reasoning_summary'] = f"Spread High ({latest_indicators.get('spread',0)}). Paused."
                  run_ai = False
+                 if news_signal:
+                     print("❌ News Trade Aborted due to Spread Spike.")
+                     decision['action'] = "WAIT"
 
             # Gate 2: MTF Alignment Check (The Matrix)
-            if run_ai and alignment_score < 0:
+            # IGNORE IF NEWS SIGNAL
+            if run_ai and not news_signal and alignment_score < 0:
                  decision['reasoning_summary'] = f"⛔ MTF MISMATCH. Score {alignment_score}. Waiting."
                  run_ai = False
                  

@@ -126,6 +126,8 @@ class BIFBrain:
         if m15_trend == h4_trend and m15_hurst > 0.55:
             alignment_score = 1.0
             allowed_strategies = {"ALL"} # Full attack
+            trend_status = f"TRENDING_{m15_trend}"
+
             
         # 2. THE SCOUT PROTOCOL (Tactical Counter-Trend)
         # H4 is Bullish, but M15 is crashing (Bearish + High Hurst)
