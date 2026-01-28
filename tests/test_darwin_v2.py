@@ -10,14 +10,14 @@ class TestDarwinSmartScoring(unittest.TestCase):
         def get_strat(subname):
             return next(s for s in self.engine.strategies if subname in s.name)
 
-        # Strategy 1: TrendHawk_LONG_20p (High Returns, MASSIVE Drawdown)
-        th = get_strat("TrendHawk_LONG_20p")
+        # Strategy 1: TrendHawk_LONG_21p 
+        th = get_strat("TrendHawk_LONG_21p")
         th.phantom_equity = 15000 # +50%
         th.peak_equity = 20000 
         th.max_drawdown = 0.25 # 25% DD from Peak
         
-        # Strategy 2: MeanRev_LONG_Std (Lower Returns, Zero Drawdown)
-        mr = get_strat("MeanRev_LONG_Std")
+        # Strategy 2: MeanRev_LONG_2.0SD (Lower Returns, Zero Drawdown)
+        mr = get_strat("MeanRev_LONG_2.0SD")
         mr.phantom_equity = 12000 # +20%
         mr.peak_equity = 12000
         mr.max_drawdown = 0.0 # 0% DD
@@ -28,7 +28,7 @@ class TestDarwinSmartScoring(unittest.TestCase):
         })
         self.engine.update(df, {}, {}) # Trigger sort
         
-        self.assertEqual(self.engine.leader.name, "MeanRev_LONG_Std", "Stable strategy should beat Volatile one")
+        self.assertEqual(self.engine.leader.name, "MeanRev_LONG_2.0SD", "Stable strategy should beat Volatile one")
 
     def test_regime_boost(self):
         """Verify that Regime boosts the correct strategy."""
@@ -36,8 +36,8 @@ class TestDarwinSmartScoring(unittest.TestCase):
         def get_strat(subname):
             return next(s for s in self.engine.strategies if subname in s.name)
             
-        th = get_strat("TrendHawk_LONG_20p")
-        mr = get_strat("MeanRev_LONG_Std")
+        th = get_strat("TrendHawk_LONG_21p")
+        mr = get_strat("MeanRev_LONG_2.0SD")
         th.phantom_equity = 10000
         mr.phantom_equity = 10000
         
@@ -45,7 +45,8 @@ class TestDarwinSmartScoring(unittest.TestCase):
         # Should boost TrendHawk by 1.2x
         mtf_data = {
             'analysis': {
-                'M15': {'hurst': 0.70} # Strong Trend
+                'M15': {'hurst': 0.70}, # Strong Trend
+                'trend': 'BULLISH' # Explicit Trend Direction needed for Hydra boost
             }
         }
         
@@ -64,7 +65,7 @@ class TestDarwinSmartScoring(unittest.TestCase):
         def get_strat(subname):
             return next(s for s in self.engine.strategies if subname in s.name)
             
-        th_long = get_strat("TrendHawk_LONG_20p")
+        th_long = get_strat("TrendHawk_LONG_21p")
         
         # Create a Bearish Breakout scenario
         # Price 90, Low_20 = 95. Breakout DOWN.

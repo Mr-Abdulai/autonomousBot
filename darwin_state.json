@@ -1,0 +1,276 @@
+{
+    "timestamp": "2026-01-28T23:06:28.115248",
+    "MeanRev_LONG_2.0SD": {
+        "equity": 12000,
+        "peak": 12000,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_9p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_9p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_13p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_13p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_21p": {
+        "equity": 15000,
+        "peak": 20000,
+        "dd": 0.25,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_21p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_34p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_34p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_55p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_55p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_89p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_89p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_144p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_144p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_LONG_200p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "TrendHawk_SHORT_200p": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_LONG_1.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_SHORT_1.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_SHORT_2.0SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_LONG_2.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_SHORT_2.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_LONG_3.0SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_SHORT_3.0SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_LONG_3.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MeanRev_SHORT_3.5SD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_LONG_30_70": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_SHORT_30_70": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_LONG_25_75": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_SHORT_25_75": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_LONG_20_80": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_SHORT_20_80": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_LONG_15_85": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_SHORT_15_85": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_LONG_10_90": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "RSI_Matrix_SHORT_10_90": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MACD_Cross_LONG_STD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "MACD_Cross_SHORT_STD": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    },
+    "Sniper_Elite": {
+        "equity": 10000.0,
+        "peak": 10000.0,
+        "dd": 0.0,
+        "wins": 0,
+        "losses": 0
+    }
+}

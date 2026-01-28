@@ -266,41 +266,109 @@ class Sniper(ShadowStrategy):
                  
          return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "H1 Alignment Fail"}
 
+class RSI_Matrix(ShadowStrategy):
+    """
+    RSI Mean Reversion Strategy (The Scalper).
+    Logic:
+        LONG: RSI < LowerBound (Oversold).
+        SHORT: RSI > UpperBound (Overbought).
+    """
+    def __init__(self, lower=30, upper=70, direction="BOTH"):
+        name = f"RSI_Matrix_{direction}_{lower}_{upper}"
+        super().__init__(name, direction)
+        self.lower = lower
+        self.upper = upper
+
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        rsi = indicators.get('RSI_14', 50)
+        
+        # Logic: Buy Low, Sell High
+        if rsi < self.lower:
+            return {'action': 'BUY', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*0.995, 'tp': df.iloc[-1]['close']*1.01}
+            
+        if rsi > self.upper:
+             return {'action': 'SELL', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*1.005, 'tp': df.iloc[-1]['close']*0.99}
+                
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+
+class MACD_Cross(ShadowStrategy):
+    """
+    MACD Momentum Strategy (The Flow).
+    Logic:
+        LONG: MACD Line > Signal Line.
+        SHORT: MACD Line < Signal Line.
+    """
+    def __init__(self, direction="BOTH", speed="STD"):
+        name = f"MACD_Cross_{direction}_{speed}"
+        super().__init__(name, direction)
+        self.speed = speed # Just for naming, uses pre-calc 'macd' and 'macd_signal'
+
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        # Note: MarketSensor provides 'macd' and 'macd_signal' (12,26,9) standard
+        
+        macd_line = indicators.get('macd', 0)
+        signal_line = indicators.get('macd_signal', 0)
+        
+        current_price = df.iloc[-1]['close']
+        
+        # Crossover logic
+        if macd_line > signal_line:
+             return {'action': 'BUY', 'confidence': 0.85, 'sl': current_price*0.995, 'tp': current_price*1.01}
+             
+        if macd_line < signal_line:
+            return {'action': 'SELL', 'confidence': 0.85, 'sl': current_price*1.005, 'tp': current_price*0.99}
+                
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+
 class DarwinEngine:
     def __init__(self):
         self.strategies = []
         self.state_file = os.path.join(Config.BASE_DIR, "darwin_state.json")
         
-        # === PROJECT HYDRA: GENERATE SWARM ===
+        # === PROJECT HIVE: SWARM GENERATION (54 Variants) ===
         
-        # 1. TrendHawk Variants (Fast/Med/Slow x Long/Short)
-        periods = [10, 20, 50]
-        directions = ['LONG', 'SHORT']
-        
+        # 1. TrendHawks (Fibonacci Sequence)
+        # 8 Periods * 2 Directions = 16 Variants
+        periods = [9, 13, 21, 34, 55, 89, 144, 200]
         for p in periods:
-            for d in directions:
-                name = f"TrendHawk_{d}_{p}p"
-                self.strategies.append(
-                    TrendHawk(name, direction=d, params={'period': p})
-                )
-                
-        # 2. MeanReverter Variants (Tight/Std/Wide x Long/Short)
-        devs = [1.5, 2.0, 2.5]
-        for v in devs:
-            for d in directions:
-                lbl = "Tight" if v < 2.0 else "Wide" if v > 2.0 else "Std"
-                name = f"MeanRev_{d}_{lbl}"
-                self.strategies.append(
-                    MeanReverter(name, direction=d, params={'std_dev': v})
-                )
+            self.strategies.append(TrendHawk(f"TrendHawk_LONG_{p}p", direction="LONG", params={'period': p}))
+            self.strategies.append(TrendHawk(f"TrendHawk_SHORT_{p}p", direction="SHORT", params={'period': p}))
+            
+        # 2. MeanReverters (Standard Deviations)
+        # 5 Deviations * 2 Directions = 10 Variants
+        devs = [1.5, 2.0, 2.5, 3.0, 3.5]
+        for d in devs:
+            lbl = f"{d:.1f}SD"
+            self.strategies.append(MeanReverter(f"MeanRev_LONG_{lbl}", direction="LONG", params={'std_dev': d}))
+            self.strategies.append(MeanReverter(f"MeanRev_SHORT_{lbl}", direction="SHORT", params={'std_dev': d}))
+            
+        # 3. RSI Matrix (Boundaries)
+        # 5 Settings * 2 Directions = 10 Variants
+        # (Lower, Upper) tuples
+        rsi_settings = [
+            (30, 70), (25, 75), (20, 80), (15, 85), (10, 90)
+        ]
+        for low, high in rsi_settings:
+            self.strategies.append(RSI_Matrix(lower=low, upper=high, direction="LONG"))
+            self.strategies.append(RSI_Matrix(lower=low, upper=high, direction="SHORT"))
+
+        # 4. MACD Cross (Momentum)
+        # 2 Variants (Standard Speed 12/26/9)
+        # In future, can expand speed logic if MarketSensor supports custom MACD
+        self.strategies.append(MACD_Cross(direction="LONG", speed="STD"))
+        self.strategies.append(MACD_Cross(direction="SHORT", speed="STD"))
         
-        # 3. Sniper (The Lone Wolf - Always Bundled for now)
+        # 5. The Sniper (Expert)
+        # 1 Variant
         self.strategies.append(Sniper("Sniper_Elite", direction='BOTH'))
+        
+        print(f"🐝 Darwin Swarm Initialized: {len(self.strategies)} Active Strategies.")
         
         # LOAD BRAIN MEMORY
         self.load_state()
         
-        self.leader = self.strategies[0]
+        if self.strategies:
+            self.leader = self.strategies[0]
         self.last_scores = {}
         
     def load_state(self):

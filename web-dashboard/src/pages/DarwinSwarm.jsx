@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { Trophy, TrendingUp, TrendingDown, Activity, Zap } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Activity, Zap, Hexagon } from 'lucide-react';
 
 function DarwinSwarm() {
     const [data, setData] = useState(null);
@@ -10,10 +10,12 @@ function DarwinSwarm() {
     useEffect(() => {
         let isMounted = true;
         const fetchData = async () => {
-            if (!isMounted) return;
             try {
                 const response = await axios.get(`${API_BASE_URL}/state`);
-                if (isMounted) setData(response.data);
+                if (isMounted) {
+                    setData(response.data);
+                    setLoading(false);
+                }
             } catch (err) {
                 console.error("API Error", err);
             }
@@ -23,96 +25,99 @@ function DarwinSwarm() {
         return () => { isMounted = false; };
     }, []);
 
-    if (loading && !data) return <div className="p-8 text-slate-500">Connecting to Swarm Intel...</div>;
+    if (loading && !data) return <div className="p-8 text-slate-500 flex items-center gap-3"><Activity className="animate-spin" /> Connecting to Hive Mind...</div>;
 
     const swarm = data?.darwin_swarm || [];
     const leader = swarm.length > 0 ? swarm[0] : null;
 
+    // Group Strategies
+    const species = {
+        "TrendHawk (Trend Followers)": swarm.filter(s => s.name.includes("TrendHawk")),
+        "MeanReverter (Band Faders)": swarm.filter(s => s.name.includes("MeanRev")),
+        "RSI Matrix (Scalpers)": swarm.filter(s => s.name.includes("RSI")),
+        "MACD Cross (Momentum)": swarm.filter(s => s.name.includes("MACD")),
+        "Elite Snipers (Confluence)": swarm.filter(s => s.name.includes("Sniper"))
+    };
+
+    const getHeatColor = (equity) => {
+        if (equity > 10050) return "bg-emerald-500/20 border-emerald-500/50 text-emerald-400";
+        if (equity > 10000) return "bg-green-500/10 border-green-500/30 text-green-400";
+        if (equity < 9950) return "bg-red-500/20 border-red-500/50 text-red-400";
+        if (equity < 10000) return "bg-rose-500/10 border-rose-500/30 text-rose-400";
+        return "bg-slate-700/30 border-slate-600 text-slate-400";
+    };
+
     return (
-        <div className="p-8 space-y-6 max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold text-white mb-6">Darwinian Evolution</h1>
-
-            {/* LEADER BOARD */}
-            {leader && (
-                <div className="grid grid-cols-3 gap-6 mb-8">
-                    <div className="glass-card p-6 border-l-4 border-l-yellow-500">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Trophy className="text-yellow-400" />
-                            <div className="text-sm text-slate-400 uppercase">Alpha Leader</div>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{leader.name}</div>
-                        <div className="text-sm text-yellow-500 mt-1">{leader.direction} Strategy</div>
-                    </div>
-
-                    <div className="glass-card p-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Activity className="text-blue-400" />
-                            <div className="text-sm text-slate-400 uppercase">Darwin Score</div>
-                        </div>
-                        <div className="text-2xl font-bold text-white">{leader.score?.toFixed(0)}</div>
-                        <div className="text-xs text-slate-500 mt-1">Selection Metric</div>
-                    </div>
-
-                    <div className="glass-card p-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Zap className="text-green-400" />
-                            <div className="text-sm text-slate-400 uppercase">Virtual Equity</div>
-                        </div>
-                        <div className="text-2xl font-bold text-green-400">${leader.equity?.toFixed(2)}</div>
-                        <div className="text-xs text-slate-500 mt-1">Simulated Performance</div>
-                    </div>
+        <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                        <Hexagon className="text-yellow-500" /> Project Hive
+                    </h1>
+                    <div className="text-slate-400 text-sm mt-1">Active Swarm Intelligence: {swarm.length} Nodes</div>
                 </div>
-            )}
 
-            {/* SWARM TABLE */}
-            <div className="glass-card overflow-hidden">
-                <div className="p-4 border-b border-slate-700 bg-slate-800/50">
-                    <h2 className="text-lg font-bold text-white">Strategy Ecosystem ({swarm.length})</h2>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-800/50 text-slate-400 font-mono">
-                            <tr>
-                                <th className="p-4">Rank</th>
-                                <th className="p-4">Strategy Name</th>
-                                <th className="p-4">Focus</th>
-                                <th className="p-4 text-right">Score</th>
-                                <th className="p-4 text-right">Equity</th>
-                                <th className="p-4 text-center">W / L</th>
-                                <th className="p-4 text-right">DD %</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700/50">
-                            {swarm.map((strat, idx) => (
-                                <tr key={strat.name} className="hover:bg-slate-700/30 transition-colors">
-                                    <td className="p-4 font-mono text-slate-500">#{idx + 1}</td>
-                                    <td className="p-4 font-bold text-white">
-                                        {strat.name}
-                                        {idx === 0 && <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">LEADER</span>}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${strat.direction === 'LONG' ? 'bg-green-500/10 text-green-400' :
-                                                strat.direction === 'SHORT' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'
-                                            }`}>
-                                            {strat.direction}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right font-mono text-blue-300">{strat.score?.toFixed(0)}</td>
-                                    <td className="p-4 text-right font-mono text-green-400">${strat.equity?.toFixed(2)}</td>
-                                    <td className="p-4 text-center font-mono">
-                                        <span className="text-green-500">{strat.wins}</span> / <span className="text-red-500">{strat.losses}</span>
-                                    </td>
-                                    <td className="p-4 text-right font-mono text-red-400">{strat.drawdown ? (strat.drawdown * 100).toFixed(2) : '0.00'}%</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                {!swarm.length && (
-                    <div className="p-8 text-center text-slate-500">
-                        Waiting for Swarm Intel...
+                {leader && (
+                    <div className="flex gap-6">
+                        <div className="glass-card px-6 py-3 border border-yellow-500/30 bg-yellow-500/5">
+                            <div className="text-xs text-yellow-500 uppercase font-bold mb-1">Current Alpha</div>
+                            <div className="text-xl font-mono font-bold text-white">{leader.name}</div>
+                            <div className="text-sm text-slate-400">Score: {leader.score?.toFixed(0)}</div>
+                        </div>
                     </div>
                 )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {Object.entries(species).map(([groupName, strats]) => (
+                    <div key={groupName} className="glass-card p-6">
+                        <h3 className="text-lg font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2 flex justify-between">
+                            {groupName}
+                            <span className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-500">{strats.length} Variants</span>
+                        </h3>
+                        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                            {strats.map(s => {
+                                const isLeader = leader?.name === s.name;
+                                const shortName = s.name.replace(/TrendHawk_|MeanRev_|RSI_Matrix_|MACD_Cross_|Sniper_/, '')
+                                    .replace('LONG_', 'L_')
+                                    .replace('SHORT_', 'S_')
+                                    .replace('BOTH_', 'Bi_');
+
+                                return (
+                                    <div
+                                        key={s.name}
+                                        className={`
+                                            metric-card p-2 rounded border transition-all duration-300 relative group
+                                            ${getHeatColor(s.equity)}
+                                            ${isLeader ? 'ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]' : 'hover:scale-105'}
+                                        `}
+                                    >
+                                        {/* Leader Crown */}
+                                        {isLeader && <div className="absolute -top-2 -right-2 text-yellow-400"><Trophy size={14} fill="currentColor" /></div>}
+
+                                        <div className="text-[10px] uppercase tracking-wider font-bold truncate opacity-70 mb-1" title={s.name}>
+                                            {shortName}
+                                        </div>
+
+                                        <div className="text-lg font-bold font-mono text-center">
+                                            {s.score?.toFixed(0)}
+                                        </div>
+
+                                        <div className={`text-[10px] font-mono text-center ${s.equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>
+                                            ${(s.equity - 10000).toFixed(0)}
+                                        </div>
+
+                                        {/* Hover Tooltip */}
+                                        <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 border border-slate-700 p-2 rounded shadow-xl z-10 -bottom-12 left-0 w-32 pointer-events-none">
+                                            <div className="text-xs text-slate-300">Win/Loss: <span className="text-green-400">{s.wins}</span>/<span className="text-red-400">{s.losses}</span></div>
+                                            <div className="text-xs text-slate-300">DD: {(s.drawdown * 100).toFixed(2)}%</div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
