@@ -13,6 +13,7 @@ from app.performance_analyzer import PerformanceAnalyzer
 from app.time_manager import TimeManager
 from app.bif_brain import BIFBrain
 from app.darwin_engine import DarwinEngine
+from app.oracle import Oracle
 
 def main():
     print("=== Hybrid Neuro-Symbolic Trading System Starting ===")
@@ -34,6 +35,7 @@ def main():
     time_manager = TimeManager()
     brain = BIFBrain()
     darwin = DarwinEngine() # Phase 83
+    oracle = Oracle(ai_strategist) # Phase 90
     
     # 3. Connection Check
     if not sensor.initialize():
@@ -197,7 +199,16 @@ Current Leader: {darwin.leader.name}
                 
             # Log State
             swarm_state = darwin.get_swarm_state()
-            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state)
+            
+            # ORACLE BRIEFING
+            brief = oracle.generate_brief(
+                market_data=market_summary, # Use raw text or dict, Oracle handles it (MarketSummary is str, code needs fix or Oracle handles str)
+                regime={"trend": regime_tag, "summary": bif_context},
+                leader_name=darwin.leader.name,
+                active_trades=active_trades
+            )
+            
+            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state, oracle_brief=brief)
             dashboard.update_market_history(df)
             
             # FORCE LOG DECISION for Cortex (CSV)

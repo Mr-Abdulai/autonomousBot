@@ -8,4 +8,7 @@ __pycache__/
 system_state.json
 market_history.json
 trades.json
+darwin_state.json
+darwin_swarm_state.json
 debug*.html
+error.log

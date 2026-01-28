@@ -68,6 +68,24 @@ function DarwinSwarm() {
                 )}
             </div>
 
+            {/* ORACLE BRIEFING */}
+            {data?.oracle_brief && (
+                <div className="glass-card p-6 border-l-4 border-l-blue-500 bg-blue-500/5 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Zap size={100} />
+                    </div>
+                    <div className="flex items-start gap-4 relaltive z-10">
+                        <div className="p-3 bg-blue-500/20 rounded-full text-blue-400">
+                            <Activity size={24} />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-1">The Oracle (Market Narrative)</h3>
+                            <p className="text-xl text-slate-200 font-light leading-relaxed">"{data.oracle_brief}"</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {Object.entries(species).map(([groupName, strats]) => (
                     <div key={groupName} className="glass-card p-6">

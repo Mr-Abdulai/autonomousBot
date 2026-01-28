@@ -215,6 +215,36 @@ class GroqStrategist:
             "stop_loss_atr_multiplier": 1.0
         }
 
+    def get_narrative_intelligence(self, user_prompt: str) -> str:
+        """
+        Phase 90 (The Oracle): Generates raw text for Dashboard Briefings.
+        Bypasses JSON parsing constraints.
+        """
+        try:
+            prompt = f"""
+            {user_prompt}
+            
+            IMPORTANT: Return ONLY the raw narrative text. 
+            Do NOT include 'Here is the summary:' or similar fillers.
+            Do NOT format as JSON.
+            """
+            
+            chat_completion = self.client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": "You are a concise financial reporter."},
+                    {"role": "user", "content": prompt}
+                ],
+                model=self.model,
+                temperature=0.3, # Slightly creative but grounded
+            )
+
+            return chat_completion.choices[0].message.content.strip()
+            
+        except Exception as e:
+            print(f"Narrative Gen Error: {e}")
+            return "Market data unavailable."
+
+
 if __name__ == "__main__":
     # Test stub
     try:

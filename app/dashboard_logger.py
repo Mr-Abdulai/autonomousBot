@@ -19,16 +19,18 @@ class DashboardLogger:
                 # Added 'PnL' column
                 writer.writerow(["Timestamp", "Symbol", "Action", "Confidence", "Reasoning", "Entry", "SL", "TP", "Size", "PnL"])
 
-    def update_system_state(self, account_info: dict, open_trades: list, market_data: dict = None, last_decision: dict = None, bif_stats: dict = None, swarm_state: list = None):
+    def update_system_state(self, account_info: dict, open_trades: list, market_data: dict = None, last_decision: dict = None, bif_stats: dict = None, swarm_state: list = None, oracle_brief: str = None):
         """
         Writes the current heartbeat and extended state to JSON.
         market_data: Optional dict containing latest indicators (RSI, MACD, etc)
         bif_stats: Optional dict containing HMM/Entropy/Hurst
         swarm_state: Optional list of all Darwin strategies
+        oracle_brief: Optional string from the Oracle
         """
         state = {
             "last_heartbeat": datetime.now().isoformat(),
             "status": "ONLINE",
+            "oracle_brief": oracle_brief if oracle_brief else "Initializing Intelligence...",
             "symbol": Config.SYMBOL,
             "risk_per_trade": Config.RISK_PER_TRADE,
             "active_trades": self._enrich_trades_with_pips(open_trades),
