@@ -241,7 +241,7 @@ Current Leader: {darwin.leader.name}
             
             # ORACLE BRIEFING
             brief = oracle.generate_brief(
-                market_data=market_summary, # Use raw text or dict, Oracle handles it (MarketSummary is str, code needs fix or Oracle handles str)
+                market_data=latest_indicators, # FIX: Pass Dict, not Str
                 regime={"trend": regime_tag, "summary": bif_context},
                 leader_name=darwin.leader.name,
                 active_trades=active_trades
