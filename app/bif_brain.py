@@ -146,9 +146,17 @@ class BIFBrain:
 
         # 3. CHOPPY MARKET (Range)
         elif m15_hurst < 0.45:
+             # Check if we are fighting a higher timeframe trend (The Rebel Protocol)
+             is_fighting_trend = (h1_hurst > 0.55 or h4_hurst > 0.55)
+             
              alignment_score = 0.5
              allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
              trend_status = "RANGING"
+             
+             if is_fighting_trend:
+                 scout_mode = True # Use Reduced Risk
+                 trend_status = "RANGING_REBEL" # Metadata
+
              
         # 4. MISMATCH / DANGEROUS / LOW ENTROPY BIAS
         else:
