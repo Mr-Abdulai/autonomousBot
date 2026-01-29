@@ -113,7 +113,35 @@ def main():
             
             risk_manager.update_account_state(account_info['equity'])
 
-            # ... (News Radar Check Logic preserved, assume it's above A. SENSE)
+            # --- NEWS RADAR (Phase 60) ---
+            # Check for News Triggers every 5 minutes (to avoid IP bans)
+            if 'last_news_check' not in locals(): locals()['last_news_check'] = datetime.now() - timedelta(minutes=10)
+            
+            news_signal = None
+            if (datetime.now() - locals()['last_news_check']).total_seconds() > 300:
+                print("📡 Scanning News Radar...")
+                locals()['last_news_check'] = datetime.now()
+                
+                # Check if news system is available (Handle 403 gracefully)
+                try:
+                    # We need to access the Harvester directly or add a method to Sensor
+                    # Sensor checks news in get_market_summary but doesn't return the event object.
+                    # Let's access sensor.news directly.
+                    event = sensor.news.fetch_latest_trigger()
+                    
+                    if event:
+                        print(f"🚨 NEWS TRIGGER DETECTED: {event['currency']} {event['event']} (Act: {event['actual']} vs Fcst: {event['forecast']})")
+                        # Quick Trend Check for Context
+                        trend_m15 = sensor.get_trend_data(Config.TIMEFRAME)
+                        
+                        # AI Analysis
+                        news_decision = ai_strategist.analyze_news_impact(event, trend_m15)
+                        
+                        if news_decision['action'] in ['BUY', 'SELL']:
+                            print(f"🗞️ NEWS TRADING SIGNAL: {news_decision['action']} ({news_decision['reasoning']})")
+                            news_signal = news_decision
+                except Exception as e:
+                    print(f"⚠️ News Feed Error: {e}")
             
             # A. SENSE (Upgraded for Chronos Pro)
             # Fetch Deep History for The Weaver

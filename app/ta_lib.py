@@ -142,11 +142,12 @@ class TALib:
         is_down = (l < l.shift(1)) & (l < l.shift(2)) & \
                   (l < l.shift(-1)) & (l < l.shift(-2))
                   
-        df['fractal_high'] = is_up
-        df['fractal_low'] = is_down
+        # Use .loc to avoid SettingWithCopyWarning
+        df.loc[:, 'fractal_high'] = is_up
+        df.loc[:, 'fractal_low'] = is_down
         
         # Fill NA (created by shift) with False
-        df['fractal_high'] = df['fractal_high'].fillna(False)
-        df['fractal_low'] = df['fractal_low'].fillna(False)
+        df.loc[:, 'fractal_high'] = df['fractal_high'].fillna(False)
+        df.loc[:, 'fractal_low'] = df['fractal_low'].fillna(False)
         
         return df
