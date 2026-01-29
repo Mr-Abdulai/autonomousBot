@@ -171,6 +171,9 @@ function Cockpit() {
                             </div>
                         )}
                     </div>
+
+                    {/* Project Chronos Panel */}
+                    <ChronosPanel stats={data?.chronos_simulation} />
                 </div>
 
                 {/* Right Col: Ticker & Mini Chart */}
@@ -307,5 +310,50 @@ const MetricCardSmall = ({ icon, label, value, isCurrency, highlight }) => (
         </div>
     </div>
 );
+
+// Chronos Component
+const ChronosPanel = ({ stats }) => {
+    if (!stats || !stats.win_rate) return (
+        <div className="glass-card p-4 flex items-center justify-between opacity-50">
+            <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-slate-500" />
+                <span className="text-sm text-slate-400">Chronos Standby</span>
+            </div>
+        </div>
+    );
+
+    const isGo = stats.recommendation === "EXECUTE";
+    const winRate = (stats.win_rate * 100).toFixed(0);
+    const survival = (stats.survival_rate * 100).toFixed(0);
+
+    return (
+        <div className="glass-card p-5 border-t-2 border-t-blue-500/50">
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-blue-400" />
+                    Project Chronos
+                </h3>
+                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${isGo ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}>
+                    {isGo ? 'GO AHEAD' : 'VETOED'}
+                </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-2">
+                <div>
+                    <div className="text-xs text-slate-500 mb-0.5">Win Prob</div>
+                    <div className="text-xl font-mono font-bold text-white">{winRate}%</div>
+                </div>
+                <div>
+                    <div className="text-xs text-slate-500 mb-0.5">Survival</div>
+                    <div className="text-xl font-mono font-bold text-white">{survival}%</div>
+                </div>
+            </div>
+            <div className="text-[10px] text-slate-500 text-center">
+                {stats.n_sims} Parallel Futures Simulated
+            </div>
+        </div>
+    );
+};
 
 export default Cockpit;
