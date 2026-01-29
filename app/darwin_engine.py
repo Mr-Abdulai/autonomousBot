@@ -111,26 +111,25 @@ class ShadowStrategy(ABC):
             # Boost logic needs to check Class Name string AND Direction
             regime_trend = mtf_regime.get('trend', 'NEUTRAL') # Expecting 'BULLISH', 'BEARISH', 'RANGING'
             
-            # TrendHawk Logic (Trend Following)
-            if "TrendHawk" in self.name:
+            # A. TREND STRATEGIES (TrendHawk, MACD_Cross, Sniper)
+            is_trend_strat = any(x in self.name for x in ["TrendHawk", "MACD_Cross", "Sniper"])
+            if is_trend_strat:
                 if hurst > 0.55: # Trending Regime
                     # Directional Matching
                     if regime_trend == 'BULLISH':
-                        if self.direction == 'LONG': boost = 1.3 # Strong Boost
-                        elif self.direction == 'SHORT': boost = 0.7 # Strong Penalty
+                        if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.3
+                        elif self.direction == 'SHORT': boost = 0.7
                     elif regime_trend == 'BEARISH':
-                        if self.direction == 'SHORT': boost = 1.3
+                        if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.3
                         elif self.direction == 'LONG': boost = 0.7
                 else: 
-                     # Not trending? Penalize TrendHawk slightly
+                     # Not trending? Penalize slightly
                      boost = 0.9
-                     
-            # MeanReverter Logic (Counter Trend)
-            elif "MeanRev" in self.name:
+
+            # B. MEAN REVERSION STRATEGIES (MeanReverter, RSI_Matrix)
+            elif any(x in self.name for x in ["MeanRev", "RSI_Matrix"]):
                 if hurst < 0.45: # Mean Reversion Regime
                      boost = 1.2
-                     # In Range, direction matters less, but we can prefer fading the macro trend?
-                     # For now, generic boost is fine.
                 else:
                      boost = 0.8 # Don't mean revert in trends
                 
