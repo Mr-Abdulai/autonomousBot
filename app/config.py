@@ -20,6 +20,7 @@ class Config:
     SMART_FILTER = os.getenv("SMART_FILTER", "true").lower() == "true"
     MAX_OPEN_TRADES = 3 # Pyramiding Limit
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
+    OVERRIDE_TIME_GUARD = True # STRICTLY FOR DEBUGGING/TESTING. Ignore Market Hours.
     
     # Phase 68: Dynamic Risk
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL

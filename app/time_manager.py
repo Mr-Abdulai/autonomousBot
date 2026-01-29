@@ -1,5 +1,6 @@
 from datetime import datetime, time
 import pytz
+from app.config import Config
 
 class TimeManager:
     """
@@ -31,6 +32,9 @@ class TimeManager:
         Returns True if within trading hours (London Start -> NY End).
         Returns False if in Kill Zone (Night/Asia) or Weekend.
         """
+        if Config.OVERRIDE_TIME_GUARD:
+            return True
+
         now = self.get_current_time()
 
         # 1. Weekend Check (Friday 22:00 UTC - Sunday 22:00 UTC is usually Forex closed)
