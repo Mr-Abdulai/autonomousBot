@@ -227,13 +227,20 @@ Current Leader: {darwin.leader.name}
 
             # Gate 2: MTF Alignment Check (The Matrix)
             # IGNORE IF NEWS SIGNAL
+            # Gate 2: MTF Alignment Check (The Matrix)
+            # IGNORE IF NEWS SIGNAL
+            print(f"DEBUG: Checking Gate 2. alignment_score={alignment_score}, run_ai={run_ai}", flush=True)
             if run_ai and not news_signal and alignment_score < 0:
                  decision['reasoning_summary'] = f"⛔ MTF MISMATCH. Score {alignment_score}. Waiting."
                  run_ai = False
+                 print("DEBUG: Gate 2 Blocked.", flush=True)
                  
             # Gate 3: Darwinian Signal (The Jury Protocol)
+            # Gate 3: Darwinian Signal (The Jury Protocol)
             if run_ai:
+                print("DEBUG: Entering Gate 3 (Darwin)...", flush=True)
                 darwin_signal = darwin.get_consensus_signal(df, latest_indicators, mtf_data)
+                print(f"DEBUG: Darwin Signal: {darwin_signal}", flush=True)
                 
                 if darwin_signal['action'] == "HOLD":
                     reason = darwin_signal.get('reason', 'Jury Voted HOLD')
@@ -249,8 +256,11 @@ Current Leader: {darwin.leader.name}
                     decision['confidence_score'] = conf
 
             # D. AI Strategy Layer (Groq)
+            # D. AI Strategy Layer (Groq)
             if run_ai:
+                print("DEBUG: Calling Groq Strategist...", flush=True)
                 analyzed_decision = ai_strategist.get_trade_decision(market_summary, "")
+                print(f"DEBUG: Groq Response: {analyzed_decision}", flush=True)
                 decision = risk_manager.validate_signal(analyzed_decision)
                 
             # Log State
@@ -272,7 +282,12 @@ Current Leader: {darwin.leader.name}
             # User wants "Cortex Updates", likely wants to see the thoughts.
             if run_ai or decision['action'] != "WAIT":
                 # We log even Holds so the user sees the logic "Why Hold?"
-                dashboard.log_decision(decision)
+                print(f"DEBUG: Logging decision: {decision['action']}", flush=True)
+                try:
+                    dashboard.log_decision(decision)
+                    print("DEBUG: Logged to CSV.", flush=True)
+                except Exception as e:
+                    print(f"DEBUG: Failed to log decision: {e}", flush=True)
 
             # E. Execution Logic
             if decision['action'] in ["BUY", "SELL"]:
