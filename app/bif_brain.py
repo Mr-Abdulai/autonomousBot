@@ -275,7 +275,17 @@ class BIFBrain:
             
             # Train (Fit on history)
             # Instantiating locally to avoid state accumulation warnings from hmmlearn
-            model = GMMHMM(n_components=3, n_mix=2, covariance_type="full", n_iter=100, random_state=42, init_params='stmcw')
+            # FIX: Use 'diag' covariance for stability on financial data. 
+            # FIX: Regularize 'min_covar' to prevent singularity in flat markets.
+            model = GMMHMM(
+                n_components=3, 
+                n_mix=2, 
+                covariance_type="diag", 
+                n_iter=500, 
+                random_state=42, 
+                init_params='stmcw',
+                min_covar=0.001
+            )
             
             model.fit(X_scaled)
             
