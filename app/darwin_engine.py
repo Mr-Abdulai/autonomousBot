@@ -527,6 +527,102 @@ class DarwinEngine:
             
         return signal
 
+    def get_consensus_signal(self, df, indicators, mtf_data, top_n=3) -> dict:
+        """
+        Phase 93: The Jury.
+        Instead of following 1 leader, we poll the Top N strategies.
+        Returns a consensus signal.
+        """
+        # 1. Reuse Filtering Logic from get_alpha_signal
+        bif_analysis = mtf_data.get('analysis', {})
+        allowed = bif_analysis.get('allowed_strategies', ['ALL'])
+        
+        candidates = []
+        
+        # Filter Logic
+        if 'ALL' in allowed:
+            candidates = self.strategies # Already sorted by score
+        else:
+            # Filter specifically
+            for strat in self.strategies:
+                 is_match = False
+                 for allow_tag in allowed:
+                    tag_map = {
+                        "MeanReverter_LONG": "MeanRev_LONG",
+                        "MeanReverter_SHORT": "MeanRev_SHORT",
+                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
+                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
+                        "TrendHawk_LONG": "TrendHawk_LONG",
+                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                    }
+                    search_term = tag_map.get(allow_tag, allow_tag)
+                    if search_term in strat.name:
+                        is_match = True
+                        break
+                 if is_match:
+                     candidates.append(strat)
+        
+        # If not enough candidates, take what we have
+        if not candidates:
+             return {'action': 'HOLD', 'reason': 'No Available Candidates for Jury'}
+             
+        # Select The Jury
+        jury = candidates[:top_n]
+        votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+        reasons = []
+        
+        print(f"⚖️ THE JURY IS IN SESSION. Members: {[s.name for s in jury]}")
+        
+        for juror in jury:
+            sig = juror.generate_signal(df, indicators, mtf_data)
+            action = sig['action']
+            votes[action] = votes.get(action, 0) + 1
+            reasons.append(f"{juror.name}: {action}")
+            
+        # Decision Logic
+        final_action = "HOLD"
+        confidence = 0.0
+        details = " | ".join(reasons)
+        
+        # Check Unanimous
+        if votes['BUY'] == len(jury):
+            final_action = "BUY"
+            confidence = 1.0
+            details = f"UNANIMOUS BUY ({details})"
+        elif votes['SELL'] == len(jury):
+            final_action = "SELL"
+            confidence = 1.0
+            details = f"UNANIMOUS SELL ({details})"
+            
+        # Check Majority (Simple Majority > 50%)
+        # For N=3, we need 2.
+        elif votes['BUY'] >= (len(jury) / 2 + 0.1): # > 1.5
+             final_action = "BUY"
+             confidence = 0.8
+             details = f"MAJORITY BUY ({details})"
+        elif votes['SELL'] >= (len(jury) / 2 + 0.1):
+             final_action = "SELL"
+             confidence = 0.8
+             details = f"MAJORITY SELL ({details})"
+        else:
+             final_action = "HOLD"
+             details = f"HUNG JURY ({details})"
+             
+        # Inject Scout Metadata logic (reused)
+        scout_mode = False
+        if 'ALL' not in allowed:
+            scout_mode = True
+
+        return {
+            'action': final_action,
+            'confidence': confidence,
+            'reason': details,
+            'source': f"Jury::{len(jury)}",
+            'darwin_score': self.last_scores.get(self.leader.name, 0), # Fallback score
+            'scout_mode': scout_mode,
+            'jury_votes': votes
+        }
+
     def get_leaderboard(self) -> str:
         # Hydra Upgrade: Only show Top 5 to avoid console spam
         s = "Darwin Smart Leaderboard (Top 5):\n"

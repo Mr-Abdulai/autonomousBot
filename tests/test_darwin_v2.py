@@ -85,5 +85,57 @@ class TestDarwinSmartScoring(unittest.TestCase):
         
         self.assertEqual(sig['action'], "HOLD", "LONG-only strategy must HOLD on Bear signal")
 
+    def test_consensus_voting(self):
+        """Verify Consensus Logic (Unanimous vs Conflict)."""
+        # Mock Strategies by modifying phantom equity to force top ranking
+        s1 = self.engine.strategies[0]
+        s2 = self.engine.strategies[1]
+        s3 = self.engine.strategies[2]
+        
+        s1.phantom_equity = 20000 
+        s2.phantom_equity = 19000
+        s3.phantom_equity = 18000
+        
+        # We need to Mock generate_signal logic for these SPECIFIC instances.
+        # Python's `unittest.mock` is great but here we can just monkey-patch the instance method 
+        # OR just supply data that triggers them all.
+        # But they are different strategies (TrendHawk, MeanRev etc), hard to align input data for all.
+        # Monkey Patching `generate_signal` on the instances is safer for unit logic check.
+        
+        s1.generate_signal = lambda d, i, m: {'action': 'BUY'}
+        s2.generate_signal = lambda d, i, m: {'action': 'BUY'}
+        s3.generate_signal = lambda d, i, m: {'action': 'BUY'}
+        
+        # 1. Unanimous BUY
+        res = self.engine.get_consensus_signal(None, None, {})
+        self.assertEqual(res['action'], 'BUY')
+        self.assertEqual(res['confidence'], 1.0)
+        self.assertIn("UNANIMOUS", res['reason'])
+        
+        # 2. Majority BUY (2 Buy, 1 Sell)
+        s3.generate_signal = lambda d, i, m: {'action': 'SELL'}
+        res = self.engine.get_consensus_signal(None, None, {})
+        self.assertEqual(res['action'], 'BUY')
+        self.assertEqual(res['confidence'], 0.8)
+        self.assertIn("MAJORITY", res['reason'])
+        
+        # 3. Conflict (1 Buy, 2 Sell) -> Top 3 Logic: 2 Sell wins Majority logic.
+        s1.generate_signal = lambda d, i, m: {'action': 'BUY'} # Leader says BUY
+        s2.generate_signal = lambda d, i, m: {'action': 'SELL'}
+        s3.generate_signal = lambda d, i, m: {'action': 'SELL'}
+        
+        res = self.engine.get_consensus_signal(None, None, {})
+        self.assertEqual(res['action'], 'SELL') # Should follow Majority
+        self.assertEqual(res['confidence'], 0.8)
+        
+        # 4. Hung Jury (1 Buy, 1 Sell, 1 Hold)
+        s1.generate_signal = lambda d, i, m: {'action': 'BUY'}
+        s2.generate_signal = lambda d, i, m: {'action': 'SELL'}
+        s3.generate_signal = lambda d, i, m: {'action': 'HOLD'}
+        
+        res = self.engine.get_consensus_signal(None, None, {})
+        self.assertEqual(res['action'], 'HOLD')
+        self.assertIn("HUNG JURY", res['reason'])
+
 if __name__ == '__main__':
     unittest.main()

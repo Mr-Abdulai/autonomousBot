@@ -219,17 +219,22 @@ Current Leader: {darwin.leader.name}
                  decision['reasoning_summary'] = f"⛔ MTF MISMATCH. Score {alignment_score}. Waiting."
                  run_ai = False
                  
-            # Gate 3: Darwinian Signal
+            # Gate 3: Darwinian Signal (The Jury Protocol)
             if run_ai:
-                darwin_signal = darwin.get_alpha_signal(df, latest_indicators, mtf_data)
+                darwin_signal = darwin.get_consensus_signal(df, latest_indicators, mtf_data)
+                
                 if darwin_signal['action'] == "HOLD":
-                    reason = darwin_signal.get('reason', 'Waiting for setup')
-                    print(f"⏳ Darwin Leader ({darwin.leader.name}) Waiting: {reason}")
-                    decision['reasoning_summary'] = f"Darwin Leader ({darwin.leader.name}) says HOLD: {reason}"
+                    reason = darwin_signal.get('reason', 'Jury Voted HOLD')
+                    print(f"⚖️ Jury Verdict: HOLD ({reason})")
+                    decision['reasoning_summary'] = f"Jury Veto: {reason}"
                     run_ai = False
                 else:
-                    print(f"🔥 Darwin Leader ({darwin.leader.name}) Signals {darwin_signal['action']}!")
-                    market_summary += f"\n[SIGNAL REQUEST] The Evolutionary Engine recommends {darwin_signal['action']} based on {darwin.leader.name} logic."
+                    conf = darwin_signal.get('confidence', 0.8)
+                    print(f"🔥 Jury Verdict: {darwin_signal['action']} (Confidence: {conf}) | {darwin_signal['reason']}")
+                    market_summary += f"\n[SIGNAL REQUEST] The Jury recommends {darwin_signal['action']} (Confidence {conf}). Logic: {darwin_signal['reason']}"
+                    
+                    # Pass Confidence to Decision
+                    decision['confidence_score'] = conf
 
             # D. AI Strategy Layer (Groq)
             if run_ai:
