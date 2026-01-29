@@ -19,13 +19,14 @@ class DashboardLogger:
                 # Added 'PnL' column
                 writer.writerow(["Timestamp", "Symbol", "Action", "Confidence", "Reasoning", "Entry", "SL", "TP", "Size", "PnL"])
 
-    def update_system_state(self, account_info: dict, open_trades: list, market_data: dict = None, last_decision: dict = None, bif_stats: dict = None, swarm_state: list = None, oracle_brief: str = None):
+    def update_system_state(self, account_info: dict, open_trades: list, market_data: dict = None, last_decision: dict = None, bif_stats: dict = None, swarm_state: list = None, oracle_brief: str = None, chronos_stats: dict = None):
         """
         Writes the current heartbeat and extended state to JSON.
         market_data: Optional dict containing latest indicators (RSI, MACD, etc)
         bif_stats: Optional dict containing HMM/Entropy/Hurst
         swarm_state: Optional list of all Darwin strategies
         oracle_brief: Optional string from the Oracle
+        chronos_stats: Optional dict containing Simulation results
         """
         state = {
             "last_heartbeat": datetime.now().isoformat(),
@@ -51,6 +52,7 @@ class DashboardLogger:
             "market_data": market_data if market_data else {},
             "bif_analysis": bif_stats if bif_stats else {},
             "darwin_swarm": swarm_state if swarm_state else [],
+            "chronos_simulation": chronos_stats if chronos_stats else {"status": "IDLE"},
             # AI Decision
             "last_decision": {
                 "action": last_decision.get("action", "WAIT") if last_decision else "WAIT",

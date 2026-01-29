@@ -201,6 +201,7 @@ Current Leader: {darwin.leader.name}
             # C. Determine System State & Decision
             run_ai = True
             decision = {"action": "WAIT", "confidence_score": 0.0, "reasoning_summary": "Scanning..."}
+            sim_result = {} # Chronos Stats Container
             
             # --- NEWS OVERRIDE ---
             if news_signal:
@@ -263,7 +264,7 @@ Current Leader: {darwin.leader.name}
                 active_trades=active_trades
             )
             
-            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state, oracle_brief=brief)
+            dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state, oracle_brief=brief, chronos_stats=sim_result)
             dashboard.update_market_history(df)
             
             # FORCE LOG DECISION for Cortex (CSV)
