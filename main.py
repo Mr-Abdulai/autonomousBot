@@ -55,9 +55,58 @@ def main():
     # 4. Main Loop
     while True:
         try:
-            # ... (Account Info & Risk Sync preserved in previous blocks, skipped here for brevity)
-            
-             # One-time Sync for Risk Manager
+            # Gather Account Info
+            account_info = {
+                "equity": 10000.0,
+                "balance": 10000.0,
+                "profit": 0.0,
+                "margin": 0.0,
+                "margin_free": 10000.0,
+                "name": "Sim",
+                "server": "SimServer",
+                "currency": "USD",
+                "leverage": 100,
+                "daily_pnl": 0.0,
+                "total_pnl": 0.0
+            }
+            if not Config.BACKTEST_MODE and mt5.initialize():
+                acc = mt5.account_info()
+                if acc:
+                   account_info['equity'] = acc.equity
+                   account_info['balance'] = acc.balance
+                   account_info['profit'] = acc.profit
+                   account_info['margin'] = acc.margin
+                   account_info['margin_free'] = acc.margin_free
+                   account_info['name'] = acc.name
+                   account_info['server'] = acc.server
+                   account_info['currency'] = acc.currency
+                   account_info['leverage'] = acc.leverage
+                   
+                   # --- CALCULATE PnL from History ---
+                   try:
+                       now = datetime.now()
+                       # Daily (Since Midnight)
+                       midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                       daily_deals = mt5.history_deals_get(midnight, now)
+                       
+                       if daily_deals and len(daily_deals) > 0:
+                           # Net Profit = Profit + Swap + Commission + Fee
+                           account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_deals])
+                       
+                       # Total (All Time - Safer Start Date)
+                       # 1970 can cause overflow in some broker bridges. Using 2010.
+                       start_date = datetime(2010, 1, 1)
+                       all_deals = mt5.history_deals_get(start_date, now)
+                       
+                       if all_deals and len(all_deals) > 0:
+                           # FILTER OUT DEPOSITS (Type 2 = Balance)
+                           # We only want Trading Profit (Buy/Sell) + Fees
+                           trading_deals = [d for d in all_deals if d.type != mt5.DEAL_TYPE_BALANCE]
+                           account_info['total_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in trading_deals])
+                   except Exception as e:
+                       print(f"PnL Calc Warning: {e}") # Log but don't crash loop
+
+            # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
             if 'risk_synced' not in locals():
                  risk_manager.sync_start_balance(account_info['equity'])
                  locals()['risk_synced'] = True
@@ -169,47 +218,6 @@ Current Leader: {darwin.leader.name}
                     
                     # Pass Confidence to Decision
                     decision['confidence_score'] = conf
-                    # IMPORTANT: Tentatively set action so Chronos knows what to test, 
-                    # though AI (Group D) has final say, we test the Jury's intent.
-                    decision['action'] = darwin_signal['action'] 
-
-            # Gate 4: Project Chronos (The Time Chamber)
-            if run_ai and decision.get('action') in ['BUY', 'SELL']:
-                 print(f"⏳ Chronos: Simulating {decision['action']} in 100 Parallel Futures...")
-                 weaver = ChronosWeaver(df_deep) # Init with deep history
-                 
-                 # Prepare Features for Pro Engine
-                 current_features = {
-                     'price': current_price,
-                     'atr': atr_val,
-                     'volatility': atr_val / current_price if current_price > 0 else 0.001
-                 }
-                 
-                 # Generate Futures (Tries Pro, falls back to Lite)
-                 # Horizon: 12 candles (3 Hours)
-                 futures = weaver.generate_historical_echoes(current_features, n_futures=100, horizon=12)
-                 
-                 # Estimate SL/TP for Simulation (Standard 1.5 ATR risk)
-                 est_sl_dist = atr_val * 1.5
-                 est_tp_dist = est_sl_dist * 2.0
-                 
-                 sim_result = chronos_arena.run_simulation(
-                     decision['action'], 
-                     futures, 
-                     current_price, 
-                     est_sl_dist, 
-                     est_tp_dist
-                 )
-                 
-                 if sim_result['recommendation'] == 'BLOCK':
-                     print(f"🛑 Chronos VETO: Win Rate {sim_result['win_rate']:.2f} in Simulation. Risk too High.")
-                     decision['reasoning_summary'] = f"Chronos Veto (WR {sim_result['win_rate']:.2f})"
-                     decision['action'] = "WAIT" # Reset
-                     run_ai = False
-                 else:
-                     print(f"✅ Chronos CONFIRM: Win Rate {sim_result['win_rate']:.2f} (Survival {sim_result['survival_rate']:.2f})")
-                     market_summary += f"\n[CHRONOS] Simulation confirmed {decision['action']}. Win Probability: {sim_result['win_rate']:.0%}."
-
 
             # D. AI Strategy Layer (Groq)
             if run_ai:
