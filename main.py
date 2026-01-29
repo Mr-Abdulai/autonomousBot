@@ -213,14 +213,18 @@ Current Leader: {darwin.leader.name}
             
             # Gate 0: Time Guard
             if not time_manager.is_market_open():
-                 decision['reasoning_summary'] = f"Time Guard: {time_manager.get_session_status()}"
+                 status = time_manager.get_session_status()
+                 decision['reasoning_summary'] = f"Time Guard: {status}"
                  run_ai = False
+                 print(f"DEBUG: Gate 0 (Time) Blocked. Status: {status}", flush=True)
                  # Note: News might happen pre-market? Unlikely for major pairs usually inside session, but be careful.
             
             # Gate 1: Spread Guard (Critical during News)
-            if (run_ai or news_signal) and not risk_manager.validate_spread(latest_indicators.get('spread', 0)):
-                 decision['reasoning_summary'] = f"Spread High ({latest_indicators.get('spread',0)}). Paused."
+            spread = latest_indicators.get('spread', 0)
+            if (run_ai or news_signal) and not risk_manager.validate_spread(spread):
+                 decision['reasoning_summary'] = f"Spread High ({spread}). Paused."
                  run_ai = False
+                 print(f"DEBUG: Gate 1 (Spread) Blocked. Spread: {spread}", flush=True)
                  if news_signal:
                      print("❌ News Trade Aborted due to Spread Spike.")
                      decision['action'] = "WAIT"
@@ -280,7 +284,7 @@ Current Leader: {darwin.leader.name}
             # FORCE LOG DECISION for Cortex (CSV)
             # Only log if it's NOT just "Scanning..." to save disk/spam?
             # User wants "Cortex Updates", likely wants to see the thoughts.
-            if run_ai or decision['action'] != "WAIT":
+            if True: # DEBUG: FORCE LOGGING ALL STATES TO DIAGNOSE SILENT FAILURES
                 # We log even Holds so the user sees the logic "Why Hold?"
                 print(f"DEBUG: Logging decision: {decision['action']}", flush=True)
                 try:
