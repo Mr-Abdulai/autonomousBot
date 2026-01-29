@@ -20,6 +20,7 @@ class ChronosWeaver:
         Generates n_futures paths of length horizon.
         Drift is derived from recent EMA slope.
         """
+        print(f"🔮 Chronos Lite (Monte Carlo): Generating {n_futures} paths with Drift {drift:.5f}...", flush=True)
         dt = 1 # time step
         # Sigma (Volatility) approximated from ATR
         # ATR is absolute movement. Approx % vol = ATR / Price
@@ -83,8 +84,10 @@ class ChronosWeaver:
         
         if len(valid_indices) == 0:
              # Total Fallback to Monte Carlo
+             print("🔮 Chronos Warning: No historical matches found. Fallback to Lite Engine.", flush=True)
              return self.generate_monte_carlo(current_features['price'], current_features['atr'], 0)
         
+        print(f"🔮 Chronos Pro (Bootstrapping): Found {len(valid_indices)} historical echoes. Simulating...", flush=True)
         chosen_starts = np.random.choice(valid_indices, n_futures, replace=True)
         
         for i, idx in enumerate(chosen_starts):
