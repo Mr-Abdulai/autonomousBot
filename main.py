@@ -259,6 +259,48 @@ Current Leader: {darwin.leader.name}
                     # Pass Confidence to Decision
                     decision['confidence_score'] = conf
 
+            # Gate 4: Project Chronos (The Oracle of Time)
+            if run_ai:
+                print("DEBUG: Entering Gate 4 (Chronos Simulation)...", flush=True)
+                # 1. Initialize Weaver with Deep History
+                weaver = ChronosWeaver(df_deep)
+                
+                # 2. Generate Futures (100 Paths, 10 Period Horizon)
+                # Use current ATR for volatility estimation
+                atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
+                current_vol = atr_val / current_price if current_price > 0 else 0.001
+                
+                features = {'price': current_price, 'atr': atr_val, 'volatility': current_vol}
+                
+                # Hybrid: Use Bootstrap if possible, else Monte Carlo
+                futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=12)
+                
+                # 3. Simulate The Jury's Call
+                # Estimate TP/SL based on Decision (TrendHawk uses 2x Risk, etc)
+                # We'll use a standard test: 1 ATR Risk, 2 ATR Reward
+                sim_action = darwin_signal.get('action', 'HOLD')
+                
+                if sim_action in ['BUY', 'SELL']:
+                    sim_result = chronos_arena.run_simulation(
+                        signal_type=sim_action, 
+                        futures=futures, 
+                        entry_price=current_price, 
+                        sl_dist=atr_val * 1.5, 
+                        tp_dist=atr_val * 2.0
+                    )
+                    
+                    print(f"🔮 Chronos Output: {sim_result['recommendation']} (WinRate: {sim_result['win_rate']:.2f}, Survival: {sim_result['survival_rate']:.2f})")
+                    
+                    if sim_result['recommendation'] == 'BLOCK':
+                        decision['reasoning_summary'] = f"Chronos Veto: Low Success Probability ({sim_result['win_rate']:.2f})"
+                        run_ai = False
+                        print("DEBUG: Gate 4 (Chronos) Blocked.", flush=True)
+                    else:
+                        print("DEBUG: Gate 4 Passed. Simulation confirmed.", flush=True)
+                        market_summary += f"\n[SIMULATION VERIFIED] Chronos Win Rate: {sim_result['win_rate']:.2f} (Survivor: {sim_result['survival_rate']:.2f})"
+                else:
+                    print("DEBUG: Chronos skipped (No Directional Signal).", flush=True)
+
             # D. AI Strategy Layer (Groq)
             # D. AI Strategy Layer (Groq)
             if run_ai:
