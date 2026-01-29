@@ -131,6 +131,9 @@ class TALib:
         # Shift -2 means we are looking at future bars relative to i, 
         # but in realtime we just check if i-2 was a fractal relative to i, i-1, i-3, i-4.
         
+        # Explicit copy to prevent SettingWithCopyWarning on slices
+        df = df.copy()
+        
         # Vectorized implementation for speed
         # Highs
         h = df['high']
