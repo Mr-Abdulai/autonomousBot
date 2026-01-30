@@ -211,6 +211,10 @@ class ExecutionEngine:
             new_sl = None
             modification_reason = ""
             
+            # Initialize partial close tracker if not exists
+            if not hasattr(self, 'partial_closed_tracker'):
+                self.partial_closed_tracker = {}
+            
             # Logic: If Fractal is valid (not 0) use it. Else fallback to ATR? 
             # Actually user asked for Fractal. If no fractal, we hold current SL.
             
@@ -219,6 +223,15 @@ class ExecutionEngine:
             
             if action == "BUY":
                 profit = current_price - entry_price
+                
+                # NEW: Partial Profit Taking (0.5R to 1R range)
+                # Close 50% of position at 0.5R to lock in gains
+                if profit > (0.5 * risk) and profit < (1.0 * risk):
+                    if ticket not in self.partial_closed_tracker:
+                        # Close 50% of position
+                        if self.close_partial(ticket, 0.5):
+                            self.partial_closed_tracker[ticket] = True
+                            print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
                 
                 # Trigger 1: Break Even (Profit > 1.0 * Risk)
                 if profit > (1.0 * risk) and current_sl < entry_price:
@@ -235,6 +248,13 @@ class ExecutionEngine:
 
             elif action == "SELL":
                 profit = entry_price - current_price
+                
+                # NEW: Partial Profit Taking (0.5R to 1R range)
+                if profit > (0.5 * risk) and profit < (1.0 * risk):
+                    if ticket not in self.partial_closed_tracker:
+                        if self.close_partial(ticket, 0.5):
+                            self.partial_closed_tracker[ticket] = True
+                            print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
                 
                 # Trigger 1: Break Even
                 if profit > (1.0 * risk) and current_sl > entry_price:
@@ -354,4 +374,63 @@ class ExecutionEngine:
                 
         except Exception as e:
             print(f"Close Trade Error: {e}")
+            return False
+
+    def close_partial(self, ticket: int, fraction: float) -> bool:
+        """
+        Closes a partial fraction of position (0.0-1.0).
+        Used for partial profit taking.
+        """
+        try:
+            if self.backtest_mode:
+                # In backtest mode, we can't actually split positions
+                # Just log it and return True
+                print(f"[BACKTEST] Would close {fraction*100:.0f}% of {ticket}")
+                return True
+            
+            if not mt5.initialize():
+                return False
+            
+            # 1. Get Position Details
+            positions = mt5.positions_get(ticket=int(ticket))
+            if not positions:
+                print(f"Cannot close partial {ticket}: Not found in MT5.")
+                return False
+                
+            pos = positions[0]
+            
+            # 2. Calculate Partial Volume
+            close_volume = round(pos.volume * fraction, 2)
+            if close_volume < 0.01:  # Minimum lot size
+                print(f"Partial volume too small ({close_volume:.2f}), skipping.")
+                return False
+            
+            # 3. Determine Opposite Action
+            op_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+            
+            # 4. Send Partial Close Order
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "position": pos.ticket,
+                "symbol": pos.symbol,
+                "volume": close_volume,  # Partial volume
+                "type": op_type,
+                "price": mt5.symbol_info_tick(pos.symbol).bid if op_type == mt5.ORDER_TYPE_SELL else mt5.symbol_info_tick(pos.symbol).ask,
+                "deviation": 20,
+                "magic": 234001,
+                "comment": "Partial Profit Take",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+            
+            res = mt5.order_send(request)
+            if res.retcode == mt5.TRADE_RETCODE_DONE:
+                print(f"✅ PARTIAL CLOSE: {close_volume} lots of {ticket} closed (${res.price:.5f})")
+                return True
+            else:
+                print(f"⚠️ Failed to Partial Close {ticket}: {res.comment} (Code: {res.retcode})")
+                return False
+                
+        except Exception as e:
+            print(f"Partial Close Error: {e}")
             return False

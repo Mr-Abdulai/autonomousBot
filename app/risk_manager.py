@@ -73,7 +73,8 @@ class EquityCurveManager:
 class IronCladRiskManager:
     def __init__(self):
         self.risk_per_trade = Config.RISK_PER_TRADE
-        self.min_confidence = 0.70
+        # UPDATED: Lowered from 0.70 to match jury's partial agreement (1/3 votes = 0.5 confidence)
+        self.min_confidence = 0.50
         self.equity_manager = EquityCurveManager() # Initialize
 
     def update_account_state(self, equity: float, is_new_day: bool = False):

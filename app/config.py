@@ -22,6 +22,10 @@ class Config:
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
     OVERRIDE_TIME_GUARD = True # STRICTLY FOR DEBUGGING/TESTING. Ignore Market Hours.
     
+    # Execution Aggressiveness (0.0 = Passive, 1.0 = Aggressive)
+    # Controls ADX threshold, alignment cutoff, and other filters
+    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.6"))  # Balanced default
+    
     # Phase 68: Dynamic Risk
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL
     MAX_DAILY_LOSS = 0.05 # 5% Max Daily Loss (Circuit Breaker)

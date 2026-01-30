@@ -216,10 +216,19 @@ Current Leader: {darwin.leader.name}
             if Config.SMART_FILTER and not news_signal and run_ai:
                  # Check volatility
                  adx = latest_indicators.get('adx', 0)
-                 if adx < 15 and alignment_score < 0: # Extremely weak trend and no MTF alignment
-                     decision['reasoning_summary'] = "Smart Filter: Market Dead (Low ADX). Sleeping."
+                 
+                 # UPDATED: More lenient thresholds based on EXECUTION_MODE
+                 # ADX threshold: 10 (aggressive) to 15 (passive)
+                 adx_threshold = 10 + (5 * (1 - Config.EXECUTION_MODE))
+                 
+                 # Alignment threshold: -0.5 (passive) to 0.0 (aggressive)
+                 alignment_threshold = -0.5 + (0.5 * Config.EXECUTION_MODE)
+                 
+                 # Only block if BOTH conditions are extreme
+                 if adx < adx_threshold and alignment_score < alignment_threshold:
+                     decision['reasoning_summary'] = f"Smart Filter: Market Dead (ADX {adx:.1f}<{adx_threshold:.0f}, Alignment {alignment_score:.2f}<{alignment_threshold:.2f}). Sleeping."
                      run_ai = False
-                     print(f"DEBUG: Smart Filter Active (ADX {adx}). Skipping Gates.", flush=True)
+                     print(f"DEBUG: Smart Filter Active (ADX {adx:.1f}, Alignment {alignment_score:.2f}). Skipping Gates.", flush=True)
 
             # Gate 0: Time Guard
             if not time_manager.is_market_open():
@@ -295,7 +304,7 @@ Current Leader: {darwin.leader.name}
                         signal_type=sim_action, 
                         futures=futures, 
                         entry_price=current_price, 
-                        sl_dist=atr_val * 1.5, 
+                        sl_dist=atr_val * sl_multiplier, # Use adaptive SL
                         tp_dist=atr_val * 2.0
                     )
                     
@@ -308,6 +317,9 @@ Current Leader: {darwin.leader.name}
                     else:
                         print("DEBUG: Gate 4 Passed. Simulation confirmed.", flush=True)
                         market_summary += f"\n[SIMULATION VERIFIED] Chronos Win Rate: {sim_result['win_rate']:.2f} (Survivor: {sim_result['survival_rate']:.2f})"
+                        
+                        # PHASE 5A: Store Chronos result for position scaling
+                        decision['chronos_result'] = sim_result
                 else:
                     print("DEBUG: Chronos skipped (No Directional Signal).", flush=True)
 
@@ -380,6 +392,29 @@ Current Leader: {darwin.leader.name}
                 else:
                     # STANDARD LOGIC
                     sl_mult = decision.get("stop_loss_atr_multiplier", 1.5)
+                    
+                    # PHASE 5A: ADAPTIVE STOP LOSS based on Market Regime
+                    # Get BIF metrics from MTF data
+                    mtf_analysis = mtf_data.get('analysis', {})
+                    mtf_stats = mtf_analysis.get('mtf_stats', {})
+                    m15_stats = mtf_stats.get('M15', {})
+                    hurst = m15_stats.get('hurst', 0.5)
+                    entropy = m15_stats.get('entropy', 0.7)
+                    
+                    # Trending Market (High Hurst): Wider stops to give trend room
+                    if hurst > 0.6:
+                        sl_mult *= 1.3  # +30% wider in strong trends
+                        print(f"📊 Adaptive SL: Trending market (H={hurst:.2f}), widening stops by 30%")
+                    # Ranging Market (Low Hurst): Tighter stops
+                    elif hurst < 0.4:
+                        sl_mult *= 0.8  # -20% tighter in ranging
+                        print(f"📊 Adaptive SL: Ranging market (H={hurst:.2f}), tightening stops by 20%")
+                    
+                    # Low Entropy = More Certainty = Can use tighter stops
+                    if entropy < 0.5:
+                        sl_mult *= 0.9  # -10% in clear markets
+                        print(f"📊 Adaptive SL: Low entropy ({entropy:.2f}), tightening by 10%")
+                    
                     if decision['action'] == "BUY":
                         sl_price = current_price - (atr * sl_mult)
                         tp_price = current_price + ((current_price - sl_price) * 2.0)
@@ -388,8 +423,26 @@ Current Leader: {darwin.leader.name}
                         tp_price = current_price - ((sl_price - current_price) * 2.0)
 
                 risk_distance = abs(current_price - sl_price)
-                if risk_distance > 0:
-                    units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
+                
+                # Calculate units based on risk
+                units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
+                
+                # PHASE 5A: CHRONOS CONFIDENCE WEIGHTING
+                # Scale position size based on Chronos simulation results
+                if 'chronos_result' in decision:
+                    chronos_winrate = decision['chronos_result'].get('win_rate', 0.5)
+                    chronos_survival = decision['chronos_result'].get('survival_rate', 0.7)
+                    
+                    # Scale position: 40% WR = 0.7x, 50% = 1.0x, 70% = 1.3x, 80% = 1.5x
+                    chronos_multiplier = 0.5 + (chronos_winrate * 1.0)
+                    
+                    # Cap at reasonable bounds
+                    chronos_multiplier = max(0.5, min(1.5, chronos_multiplier))
+                    
+                    units *= chronos_multiplier
+                    print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%})")
+                else:
+                    print("🔮 Chronos: No simulation data, using base position size")
                     
                     # SCOUT SAFETY: Half Risk
                     if is_scout:

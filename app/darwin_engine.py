@@ -565,8 +565,31 @@ class DarwinEngine:
         if not candidates:
              return {'action': 'HOLD', 'reason': 'No Available Candidates for Jury'}
              
-        # Select The Jury
-        jury = candidates[:top_n]
+        # UPDATED: FORCE DIVERSITY - Select cross-strategy jury
+        # Pick 1 Trend + 1 Mean Reversion + 1 Momentum for balanced perspective
+        jury = []
+        strategy_types = ["TrendHawk", "MeanRev", "RSI_Matrix", "MACD_Cross", "Sniper"]
+        
+        for strategy_type in strategy_types:
+            for strat in candidates:
+                if strategy_type in strat.name and strat not in jury:
+                    jury.append(strat)
+                    break
+            if len(jury) >= top_n:
+                break
+        
+        # Fallback: if diversity selection didn't get enough, fill from candidates
+        if len(jury) < top_n:
+            for strat in candidates:
+                if strat not in jury:
+                    jury.append(strat)
+                if len(jury) >= top_n:
+                    break
+        
+        # Final fallback: just take top N if still not enough
+        if len(jury) == 0:
+            jury = candidates[:top_n]
+        
         votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
         reasons = []
         
@@ -593,16 +616,28 @@ class DarwinEngine:
             confidence = 1.0
             details = f"UNANIMOUS SELL ({details})"
             
-        # Check Majority (Simple Majority > 50%)
-        # For N=3, we need 2.
-        elif votes['BUY'] >= (len(jury) / 2 + 0.1): # > 1.5
+        # UPDATED: Reduced Quorum - Allow single strong signal
+        # Check Majority (2+ votes)
+        elif votes['BUY'] >= 2:
              final_action = "BUY"
-             confidence = 0.8
+             # Scale confidence: 2/3 = 0.73, 3/3 = 0.80
+             confidence = 0.6 + (votes['BUY'] / len(jury) * 0.2)
              details = f"MAJORITY BUY ({details})"
-        elif votes['SELL'] >= (len(jury) / 2 + 0.1):
+        elif votes['SELL'] >= 2:
              final_action = "SELL"
-             confidence = 0.8
+             confidence = 0.6 + (votes['SELL'] / len(jury) * 0.2)
              details = f"MAJORITY SELL ({details})"
+        
+        # NEW: Partial Agreement (1 vote) - Lower confidence
+        elif votes['BUY'] >= 1:
+            final_action = "BUY"
+            confidence = 0.5  # Minimum confidence for single vote
+            details = f"PARTIAL AGREEMENT BUY ({details})"
+        elif votes['SELL'] >= 1:
+            final_action = "SELL"
+            confidence = 0.5
+            details = f"PARTIAL AGREEMENT SELL ({details})"
+        
         else:
              final_action = "HOLD"
              details = f"HUNG JURY ({details})"

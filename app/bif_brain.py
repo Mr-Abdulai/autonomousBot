@@ -162,9 +162,11 @@ class BIFBrain:
              
         # 4. MISMATCH / DANGEROUS / LOW ENTROPY BIAS
         else:
-             alignment_score = -0.5 # Default Block
-             allowed_strategies = set()
-             trend_status = f"CONFUSED ({m15_trend}/{h4_trend})"
+             # UPDATED: FALLBACK Mode - Allow Mean Reversion in unclear conditions
+             # Markets spend 60-70% of time ranging, treat this as opportunity not threat
+             alignment_score = 0.2  # Neutral-Positive (was -0.5)
+             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
+             trend_status = f"UNCLEAR ({m15_trend}/{h4_trend}) - Range Mode"
 
         return {
              "mtf_stats": results,
