@@ -63,7 +63,8 @@ class ExecutionEngine:
                 "sl": sl_price,
                 "tp": tp_price,
                 "volume": volume_lots,
-                "mode": "BACKTEST"
+                "mode": "BACKTEST",
+                "partial_closed": False  # BUG FIX #10: Persist partial closure state
             }
             # Append to existing
             current_trades = self.load_state()
@@ -113,7 +114,8 @@ class ExecutionEngine:
             "volume": volume_lots,
             "open_price": result.price,
             "sl": sl_price,
-            "tp": tp_price
+            "tp": tp_price,
+            "partial_closed": False  # BUG FIX #10: Persist partial closure state
         }
         
         current_trades = self.load_state()
@@ -211,9 +213,8 @@ class ExecutionEngine:
             new_sl = None
             modification_reason = ""
             
-            # Initialize partial close tracker if not exists
-            if not hasattr(self, 'partial_closed_tracker'):
-                self.partial_closed_tracker = {}
+            # BUG FIX #10: Removed in-memory tracker, use persisted state instead
+            # (Partial close state now stored in trade['partial_closed'])
             
             # Logic: If Fractal is valid (not 0) use it. Else fallback to ATR? 
             # Actually user asked for Fractal. If no fractal, we hold current SL.
@@ -224,13 +225,16 @@ class ExecutionEngine:
             if action == "BUY":
                 profit = current_price - entry_price
                 
-                # NEW: Partial Profit Taking (0.5R to 1R range)
-                # Close 50% of position at 0.5R to lock in gains
+                # BUG FIX #10: Partial Profit Taking (0.5R to 1R range)
+                # Check persisted state instead of in-memory tracker
                 if profit > (0.5 * risk) and profit < (1.0 * risk):
-                    if ticket not in self.partial_closed_tracker:
+                    partial_closed = trade.get('partial_closed', False)
+                    if not partial_closed:
                         # Close 50% of position
                         if self.close_partial(ticket, 0.5):
-                            self.partial_closed_tracker[ticket] = True
+                            # Update trade state in file
+                            trade['partial_closed'] = True
+                            self.save_state(trades)  # Persist immediately
                             print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
                 
                 # Trigger 1: Break Even (Profit > 1.0 * Risk)
@@ -249,11 +253,14 @@ class ExecutionEngine:
             elif action == "SELL":
                 profit = entry_price - current_price
                 
-                # NEW: Partial Profit Taking (0.5R to 1R range)
+                # BUG FIX #10: Partial Profit Taking (0.5R to 1R range)
+                # Check persisted state
                 if profit > (0.5 * risk) and profit < (1.0 * risk):
-                    if ticket not in self.partial_closed_tracker:
+                    partial_closed = trade.get('partial_closed', False)
+                    if not partial_closed:
                         if self.close_partial(ticket, 0.5):
-                            self.partial_closed_tracker[ticket] = True
+                            trade['partial_closed'] = True
+                            self.save_state(trades)  # Persist immediately
                             print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
                 
                 # Trigger 1: Break Even
