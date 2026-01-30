@@ -211,6 +211,16 @@ Current Leader: {darwin.leader.name}
                 decision['stop_loss_atr_multiplier'] = 2.0 # Volatility Buffer
                 run_ai = False # Skip Standard AI
             
+            # --- SMART FILTER (CPU/API SAVER) ---
+            # If Technicals are dead flat, don't even bother with Gates.
+            if Config.SMART_FILTER and not news_signal and run_ai:
+                 # Check volatility
+                 adx = latest_indicators.get('adx', 0)
+                 if adx < 15 and alignment_score < 0: # Extremely weak trend and no MTF alignment
+                     decision['reasoning_summary'] = "Smart Filter: Market Dead (Low ADX). Sleeping."
+                     run_ai = False
+                     print(f"DEBUG: Smart Filter Active (ADX {adx}). Skipping Gates.", flush=True)
+
             # Gate 0: Time Guard
             if not time_manager.is_market_open():
                  status = time_manager.get_session_status()
