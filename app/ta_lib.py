@@ -154,3 +154,98 @@ class TALib:
         df.loc[:, 'fractal_low'] = df['fractal_low'].fillna(False)
         
         return df
+
+    @staticmethod
+    def calculate_vwap(df: pd.DataFrame) -> float:
+        """
+        PHASE 5B: Volume-Weighted Average Price
+        Institutional support/resistance level
+        """
+        if 'tick_volume' not in df.columns or len(df) < 1:
+            return df['close'].iloc[-1] if len(df) > 0 else 0.0
+        
+        typical_price = (df['high'] + df['low'] + df['close']) / 3
+        vwap = (typical_price * df['tick_volume']).cumsum() / df['tick_volume'].cumsum()
+        return vwap.iloc[-1]
+    
+    @staticmethod
+    def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> dict:
+        """
+        PHASE 5B: SuperTrend Indicator
+        Dynamic support/resistance based on ATR
+        Returns {'trend': 'UP'/'DOWN', 'level': price, 'signal': 'BUY'/'SELL'/'HOLD'}
+        """
+        if len(df) < period + 1:
+            return {'trend': 'NEUTRAL', 'level': 0.0, 'signal': 'HOLD'}
+        
+        # Calculate ATR
+        atr = TALib.atr(df, period)
+        
+        # Calculate basic upper and lower bands
+        hl_avg = (df['high'] + df['low']) / 2
+        upper_band = hl_avg + (multiplier * atr)
+        lower_band = hl_avg - (multiplier * atr)
+        
+        # Initialize supertrend
+        supertrend = pd.Series(index=df.index, dtype=float)
+        trend = pd.Series(index=df.index, dtype=int)
+        
+        # First value
+        supertrend.iloc[0] = lower_band.iloc[0]
+        trend.iloc[0] = 1  # Assume uptrend initially
+        
+        for i in range(1, len(df)):
+            # Update bands based on previous supertrend
+            if df['close'].iloc[i] > supertrend.iloc[i-1]:
+                trend.iloc[i] = 1  # Uptrend
+                supertrend.iloc[i] = max(lower_band.iloc[i], supertrend.iloc[i-1])
+            else:
+                trend.iloc[i] = -1  # Downtrend
+                supertrend.iloc[i] = min(upper_band.iloc[i], supertrend.iloc[i-1])
+        
+        current_trend = 'UP' if trend.iloc[-1] == 1 else 'DOWN'
+        current_level = supertrend.iloc[-1]
+        
+        # Generate signal (trend change)
+        signal = 'HOLD'
+        if len(trend) > 1:
+            if trend.iloc[-1] == 1 and trend.iloc[-2] == -1:
+                signal = 'BUY'  # Trend flipped to up
+            elif trend.iloc[-1] == -1 and trend.iloc[-2] == 1:
+                signal = 'SELL'  # Trend flipped to down
+        
+        return {
+            'trend': current_trend,
+            'level': current_level,
+            'signal': signal
+        }
+    
+    @staticmethod
+    def calculate_rvi(df: pd.DataFrame, period: int = 14) -> float:
+        """
+        PHASE 5B: Relative Vigor Index
+        Measures momentum/conviction behind price moves
+        Range: -1 to +1 (like RSI but centered at 0)
+        Positive = Bullish momentum, Negative = Bearish momentum
+        """
+        if len(df) < period + 10:
+            return 0.0
+        
+        # RVI formula: (Close - Open) / (High - Low)
+        # Smoothed with SMA
+        close_open = df['close'] - df['open']
+        high_low = df['high'] - df['low']
+        
+        # Avoid division by zero
+        high_low = high_low.replace(0, 0.0001)
+        
+        # Calculate numerator and denominator with SMA smoothing
+        num = close_open.rolling(window=period).mean()
+        denom = high_low.rolling(window=period).mean()
+        
+        rvi = num / denom
+        
+        # Normalize to -1 to +1 range
+        rvi = rvi.clip(-1, 1)
+        
+        return rvi.iloc[-1] if not pd.isna(rvi.iloc[-1]) else 0.0

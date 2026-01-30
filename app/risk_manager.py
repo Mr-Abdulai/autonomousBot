@@ -163,6 +163,59 @@ class IronCladRiskManager:
                 
         return True
 
+    def calculate_kelly_position(self, win_rate: float, avg_win: float, avg_loss: float, equity: float, current_price: float, sl_price: float) -> float:
+        """
+        PHASE 5B: Kelly Criterion for optimal position sizing
+        Kelly Formula: f* = (p*b - q) / b
+        where:
+            p = win probability (win_rate)
+            b = win/loss ratio (avg_win / avg_loss)
+            q = loss probability (1 - win_rate)
+        
+        Uses Half-Kelly for conservative approach
+        """
+        try:
+            # Fallback to standard method if insufficient data
+            if win_rate <= 0.5 or avg_loss == 0 or avg_win == 0:
+                print("📉 Kelly: Insufficient edge, using standard sizing")
+                return self.calculate_position_size(equity, current_price, sl_price)
+            
+            # Calculate Kelly criterion
+            b = avg_win / avg_loss  # Win/Loss ratio (e.g., 2.0 for 2R avg win vs 1R avg loss)
+            q = 1 - win_rate
+            kelly_fraction = (win_rate * b - q) / b
+            
+            # Sanity check - Kelly shouldn't be negative or > 0.25
+            if kelly_fraction <= 0:
+                print(f"📉 Kelly: No edge detected (fraction={kelly_fraction:.3f}), using min size")
+                return self.calculate_position_size(equity, current_price, sl_price) * 0.5
+            
+            # Apply Half-Kelly (more conservative, reduces variance)
+            safe_kelly = kelly_fraction * 0.5
+            
+            # Cap at 2% max for safety (vs 1% standard)
+            kelly_risk_pct = min(safe_kelly, 0.02)
+            
+            # Calculate position size using Kelly risk %
+            risk_amount = equity * kelly_risk_pct
+            risk_per_unit = abs(current_price - sl_price)
+            
+            if risk_per_unit == 0:
+                return 0.01
+            
+            units = risk_amount / risk_per_unit
+            lots = units / 100000  # Convert to MT5 lots
+            lots = max(0.01, round(lots, 2))  # Min 0.01, round to 2 decimals
+            
+            print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, Half-Kelly={safe_kelly:.3f}")
+            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {lots:.2f} lots (vs {self.risk_per_trade:.2%} standard)")
+            
+            return lots
+            
+        except Exception as e:
+            print(f"Kelly Calculation Error: {e}, falling back to standard sizing")
+            return self.calculate_position_size(equity, current_price, sl_price)
+
     def validate_spread(self, spread_points: int, max_spread: int = 20) -> bool:
         """
         Returns False if spread is too high (e.g. > 2.0 pips / 20 points).
