@@ -429,66 +429,41 @@ Current Leader: {darwin.leader.name}
                 # Position Sizing
                 atr = df.iloc[-1]['ATR_14']
                 
-                # Check for Scout Protocol (Counter-Trend)
-                is_scout = False
-                if 'darwin_signal' in locals() and darwin_signal.get('scout_mode', False):
-                    is_scout = True
-                    print("⚔️ EXECUTING SCOUT PROTOCOL: Counter-Trend Entry! Validating Fractal Stops...")
-
-                if is_scout:
-                    # SCOUT LOGIC: Tight Stop at Recent Fractal, Aggressive TP (1:3) to catch the move
-                    if decision['action'] == "BUY":
-                        # SL below recent Fractal Low
-                        sl_price = fractal_levels.get('fractal_low', current_price - atr)
-                        # Sanity: If fractal is too far or invalid, use tight ATR
-                        if sl_price >= current_price or (current_price - sl_price) > (3*atr):
-                             sl_price = current_price - (atr * 1.0)
-                             
-                        risk = current_price - sl_price
-                        tp_price = current_price + (risk * 3.0) # Aim for big reversal/correction
-                        
-                    else: # SELL
-                        # SL above recent Fractal High
-                        sl_price = fractal_levels.get('fractal_high', current_price + atr)
-                        if sl_price <= current_price or (sl_price - current_price) > (3*atr):
-                             sl_price = current_price + (atr * 1.0)
-                             
-                        risk = sl_price - current_price
-                        tp_price = current_price - (risk * 3.0)
+                # BUG FIX #9: Removed scout mode dead code ('darwin_signal' never defined)
+                # Scout protocol logic removed (lines 432-458) - was never triggered
                 
+                # STANDARD STOP LOSS & TAKE PROFIT LOGIC
+                sl_mult = decision.get("stop_loss_atr_multiplier", 2.5)  # GOLD: Default 2.5 (vs 1.5 forex)
+                
+                # PHASE 5A + GOLD: ADAPTIVE STOP LOSS based on Market Regime
+                # Get BIF metrics from MTF data
+                mtf_analysis = mtf_data.get('analysis', {})
+                mtf_stats = mtf_analysis.get('mtf_stats', {})
+                m15_stats = mtf_stats.get('M15', {})
+                hurst = m15_stats.get('hurst', 0.5)
+                entropy = m15_stats.get('entropy', 0.7)
+                
+                # GOLD OPTIMIZED: Wider adjustments for volatility
+                # Trending Market (High Hurst): MUCH wider stops for Gold's explosive moves
+                if hurst > 0.6:
+                    sl_mult *= 1.5  # +50% wider in strong trends (vs 1.3x for forex)
+                    print(f"📊 Adaptive SL (GOLD): Trending market (H={hurst:.2f}), widening stops by 50%")
+                # Ranging Market (Low Hurst): Moderate tightening (Gold ranges are still volatile)
+                elif hurst < 0.4:
+                    sl_mult *= 0.9  # -10% tighter in ranging (vs 0.8x for forex, Gold needs room)
+                    print(f"📊 Adaptive SL (GOLD): Ranging market (H={hurst:.2f}), tightening stops by 10%")
+                
+                # Low Entropy = More Certainty = Slightly tighter
+                if entropy < 0.5:
+                    sl_mult *= 0.95  # -5% in clear markets (vs 0.9x for forex)
+                    print(f"📊 Adaptive SL (GOLD): Low entropy ({entropy:.2f}), tightening by 5%")
+                
+                if decision['action'] == "BUY":
+                    sl_price = current_price - (atr * sl_mult)
+                    tp_price = current_price + ((current_price - sl_price) * 2.0)
                 else:
-                    # STANDARD LOGIC
-                    sl_mult = decision.get("stop_loss_atr_multiplier", 2.5)  # GOLD: Default 2.5 (vs 1.5 forex)
-                    
-                    # PHASE 5A + GOLD: ADAPTIVE STOP LOSS based on Market Regime
-                    # Get BIF metrics from MTF data
-                    mtf_analysis = mtf_data.get('analysis', {})
-                    mtf_stats = mtf_analysis.get('mtf_stats', {})
-                    m15_stats = mtf_stats.get('M15', {})
-                    hurst = m15_stats.get('hurst', 0.5)
-                    entropy = m15_stats.get('entropy', 0.7)
-                    
-                    # GOLD OPTIMIZED: Wider adjustments for volatility
-                    # Trending Market (High Hurst): MUCH wider stops for Gold's explosive moves
-                    if hurst > 0.6:
-                        sl_mult *= 1.5  # +50% wider in strong trends (vs 1.3x for forex)
-                        print(f"📊 Adaptive SL (GOLD): Trending market (H={hurst:.2f}), widening stops by 50%")
-                    # Ranging Market (Low Hurst): Moderate tightening (Gold ranges are still volatile)
-                    elif hurst < 0.4:
-                        sl_mult *= 0.9  # -10% tighter in ranging (vs 0.8x for forex, Gold needs room)
-                        print(f"📊 Adaptive SL (GOLD): Ranging market (H={hurst:.2f}), tightening stops by 10%")
-                    
-                    # Low Entropy = More Certainty = Slightly tighter
-                    if entropy < 0.5:
-                        sl_mult *= 0.95  # -5% in clear markets (vs 0.9x for forex)
-                        print(f"📊 Adaptive SL (GOLD): Low entropy ({entropy:.2f}), tightening by 5%")
-                    
-                    if decision['action'] == "BUY":
-                        sl_price = current_price - (atr * sl_mult)
-                        tp_price = current_price + ((current_price - sl_price) * 2.0)
-                    else:
-                        sl_price = current_price + (atr * sl_mult)
-                        tp_price = current_price - ((sl_price - current_price) * 2.0)
+                    sl_price = current_price + (atr * sl_mult)
+                    tp_price = current_price - ((sl_price - current_price) * 2.0)
 
                 risk_distance = abs(current_price - sl_price)
                 
@@ -539,13 +514,10 @@ Current Leader: {darwin.leader.name}
                     print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%})")
                 else:
                     print("🔮 Chronos: No simulation data, using base position size")
-                    
-                    # SCOUT SAFETY: Half Risk
-                    if is_scout:
-                        units = units * 0.5 
-                        print(f"🛡️ Scout Risk Applied: Units HALVED to {units:.2f}")
 
-                    if units > 0:
+                # BUG FIX #9: Removed scout safety halving (scout mode removed)
+
+                if units > 0:
                         executor.execute_trade(decision['action'], sl_price, tp_price, units)
             
             active_sleep = 5 if active_trades else 60
