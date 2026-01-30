@@ -177,24 +177,34 @@ def main():
                 regime_tag = "RANDOM WALK (NOISE)"
                 
             if alignment_score < 0:
-                 regime_tag += " [⛔ MTF MISMATCH - BLOCKED]"
+                regime_tag += " [⛔ MTF MISMATCH - BLOCKED]"
             
             # PHASE 6: GOLD ADVANCED INDICATOR CONFIRMATIONS
-            # Calculate VWAP and SuperTrend for entry quality
-            from app.ta_lib import TALib
+            # BUG FIX #8: Wrap in try-except to prevent crashes on bad data
+            try:
+                from app.ta_lib import TALib
+                
+                vwap = TALib.calculate_vwap(df)
+                supertrend = TALib.calculate_supertrend(df, period=10, multiplier=3.0)
+                rvi = TALib.calculate_rvi(df, period=14)
+                
+                # Store for later use in decision enhancement
+                advanced_indicators = {
+                    'vwap': vwap,
+                    'supertrend': supertrend,
+                    'rvi': rvi
+                }
+                
+                print(f"🔍 GOLD Advanced Indicators: VWAP={vwap:.5f}, SuperTrend={supertrend['trend']} at {supertrend['level']:.5f}, RVI={rvi:.2f}")
             
-            vwap = TALib.calculate_vwap(df)
-            supertrend = TALib.calculate_supertrend(df, period=10, multiplier=3.0)
-            rvi = TALib.calculate_rvi(df, period=14)
-            
-            # Store for later use in decision enhancement
-            advanced_indicators = {
-                'vwap': vwap,
-                'supertrend': supertrend,
-                'rvi': rvi
-            }
-            
-            print(f"🔍 GOLD Advanced Indicators: VWAP={vwap:.5f}, SuperTrend={supertrend['trend']} at {supertrend['level']:.5f}, RVI={rvi:.2f}")
+            except Exception as e:
+                # Graceful degradation: Use neutral defaults
+                print(f"⚠️ Advanced indicators failed ({e}), using neutral defaults")
+                advanced_indicators = {
+                    'vwap': current_price,  # Neutral (current price)
+                    'supertrend': {'trend': 'NEUTRAL', 'level': current_price, 'signal': 0},
+                    'rvi': 0.0  # Neutral momentum
+                }
             
             market_summary = f"{market_summary}\n\n📊 REGIME: {regime_tag}\n🧠 BIF Stats (M15): Hurst={bif_stats['hurst']:.2f}, Entropy={bif_stats['entropy']:.2f}, Alignment={alignment_score:.2f}"
             
