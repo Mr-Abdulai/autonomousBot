@@ -26,6 +26,14 @@ class Config:
     # Controls ADX threshold, alignment cutoff, and other filters
     EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.6"))  # Balanced default
     
+    # PHASE 5C: Multi-Symbol Trading
+    # Note: Exness uses suffixes like 'EURUSDm', IC Markets uses '.r', etc.
+    # The symbol_mapper will handle broker-specific formats
+    SYMBOLS = os.getenv("SYMBOLS", "EURUSD,GBPUSD,USDJPY").split(",")
+    BROKER = os.getenv("BROKER", "exness").lower()  # For symbol mapping
+    MAX_SYMBOLS_ACTIVE = int(os.getenv("MAX_SYMBOLS_ACTIVE", "3"))  # Max concurrent
+    ENABLE_MULTI_SYMBOL = os.getenv("ENABLE_MULTI_SYMBOL", "false").lower() == "true"
+    
     # Phase 68: Dynamic Risk
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL
     MAX_DAILY_LOSS = 0.05 # 5% Max Daily Loss (Circuit Breaker)
