@@ -257,12 +257,13 @@ Current Leader: {darwin.leader.name}
                  print(f"DEBUG: Gate 0 (Time) Blocked. Status: {status}", flush=True)
                  # Note: News might happen pre-market? Unlikely for major pairs usually inside session, but be careful.
             
-            # Gate 1: Spread Guard (Critical during News)
+            # Gate 1: Spread Guard (Critical during News) - GOLD OPTIMIZED
             spread = latest_indicators.get('spread', 0)
-            if (run_ai or news_signal) and not risk_manager.validate_spread(spread):
-                 decision['reasoning_summary'] = f"Spread High ({spread}). Paused."
+            # Use Gold-specific spread tolerance (50 pts vs 20 pts for forex)
+            if (run_ai or news_signal) and not risk_manager.validate_spread(spread, Config.MAX_SPREAD_POINTS):
+                 decision['reasoning_summary'] = f"Spread High ({spread} > {Config.MAX_SPREAD_POINTS}). Paused."
                  run_ai = False
-                 print(f"DEBUG: Gate 1 (Spread) Blocked. Spread: {spread}", flush=True)
+                 print(f"DEBUG: Gate 1 (Spread) Blocked. Spread: {spread} > {Config.MAX_SPREAD_POINTS}", flush=True)
                  if news_signal:
                      print("❌ News Trade Aborted due to Spread Spike.")
                      decision['action'] = "WAIT"
