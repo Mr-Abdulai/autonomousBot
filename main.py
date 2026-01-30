@@ -344,12 +344,52 @@ Current Leader: {darwin.leader.name}
                     print("DEBUG: Chronos skipped (No Directional Signal).", flush=True)
 
             # D. AI Strategy Layer (Groq)
-            # D. AI Strategy Layer (Groq)
+            analyzed_decision = {}  # BUG FIX #3: Initialize to prevent undefined variable crash
+            
             if run_ai:
                 print("DEBUG: Calling Groq Strategist...", flush=True)
                 analyzed_decision = ai_strategist.get_trade_decision(market_summary, "")
                 print(f"DEBUG: Groq Response: {analyzed_decision}", flush=True)
                 decision = risk_manager.validate_signal(analyzed_decision)
+                
+                # BUG FIX #1: PHASE 6 GOLD ENTRY CONFIRMATION - Apply BEFORE logging!
+                # Boost confidence with advanced indicators (VWAP, SuperTrend, RVI)
+                if decision['action'] in ['BUY', 'SELL']:
+                    confidence_boost = 0.0
+                    confirmations = []
+                    
+                    # VWAP Confirmation (Institutional level)
+                    if decision['action'] == 'BUY' and current_price > advanced_indicators['vwap']:
+                        confidence_boost += 0.15
+                        confirmations.append("VWAP Support (Institutions Buying)")
+                        print(f"✓ GOLD Confirmation #1: Price above VWAP ({advanced_indicators['vwap']:.5f})")
+                    elif decision['action'] == 'SELL' and current_price < advanced_indicators['vwap']:
+                        confidence_boost += 0.15
+                        confirmations.append("VWAP Resistance (Institutions Selling)")
+                        print(f"✓ GOLD Confirmation #1: Price below VWAP ({advanced_indicators['vwap']:.5f})")
+                    
+                    # SuperTrend Confirmation (Trend alignment)
+                    st_trend = advanced_indicators['supertrend']['trend']
+                    if (decision['action'] == 'BUY' and st_trend == 'UP') or \
+                       (decision['action'] == 'SELL' and st_trend == 'DOWN'):
+                        confidence_boost += 0.12
+                        confirmations.append(f"SuperTrend {st_trend}")
+                        print(f"✓ GOLD Confirmation #2: SuperTrend aligned ({st_trend} at {advanced_indicators['supertrend']['level']:.5f})")
+                    
+                    # RVI Momentum Confirmation
+                    rvi_val = advanced_indicators['rvi']
+                    if (decision['action'] == 'BUY' and rvi_val > 0.3) or \
+                       (decision['action'] == 'SELL' and rvi_val < -0.3):
+                        confidence_boost += 0.10
+                        confirmations.append(f"Strong RVI ({rvi_val:.2f})")
+                        print(f"✓ GOLD Confirmation #3: RVI momentum aligned ({rvi_val:.2f})")
+                    
+                    # Apply boost
+                    if confidence_boost > 0:
+                        original_confidence = decision.get('confidence_score', 0.7)
+                        decision['confidence_score'] = min(original_confidence + confidence_boost, 0.95)  # Cap at 0.95
+                        decision['reasoning_summary'] = f"{decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
+                        print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
                 
             # Log State
             swarm_state = darwin.get_swarm_state()
@@ -366,10 +406,7 @@ Current Leader: {darwin.leader.name}
             dashboard.update_market_history(df)
             
             # FORCE LOG DECISION for Cortex (CSV)
-            # Only log if it's NOT just "Scanning..." to save disk/spam?
-            # User wants "Cortex Updates", likely wants to see the thoughts.
             if True: # DEBUG: FORCE LOGGING ALL STATES TO DIAGNOSE SILENT FAILURES
-                # We log even Holds so the user sees the logic "Why Hold?"
                 print(f"DEBUG: Logging decision: {decision['action']}", flush=True)
                 try:
                     dashboard.log_decision(decision)
@@ -377,48 +414,6 @@ Current Leader: {darwin.leader.name}
                 except Exception as e:
                     print(f"DEBUG: Failed to log decision: {e}", flush=True)
                 
-                # Override decision if AI provided one
-                if analyzed_decision.get("action") in ["BUY", "SELL", "HOLD"]:
-                    decision = analyzed_decision
-                    
-                    # PHASE 6: GOLD ENTRY CONFIRMATION - Boost confidence with advanced indicators
-                    if decision['action'] in ['BUY', 'SELL']:
-                        confidence_boost = 0.0
-                        confirmations = []
-                        
-                        # VWAP Confirmation (Institutional level)
-                        if decision['action'] == 'BUY' and current_price > advanced_indicators['vwap']:
-                            confidence_boost += 0.15
-                            confirmations.append("VWAP Support (Institutions Buying)")
-                            print(f"✓ GOLD Confirmation #1: Price above VWAP ({advanced_indicators['vwap']:.5f})")
-                        elif decision['action'] == 'SELL' and current_price < advanced_indicators['vwap']:
-                            confidence_boost += 0.15
-                            confirmations.append("VWAP Resistance (Institutions Selling)")
-                            print(f"✓ GOLD Confirmation #1: Price below VWAP ({advanced_indicators['vwap']:.5f})")
-                        
-                        # SuperTrend Confirmation (Trend alignment)
-                        st_trend = advanced_indicators['supertrend']['trend']
-                        if (decision['action'] == 'BUY' and st_trend == 'UP') or \
-                           (decision['action'] == 'SELL' and st_trend == 'DOWN'):
-                            confidence_boost += 0.12
-                            confirmations.append(f"SuperTrend {st_trend}")
-                            print(f"✓ GOLD Confirmation #2: SuperTrend aligned ({st_trend} at {advanced_indicators['supertrend']['level']:.5f})")
-                        
-                        # RVI Momentum Confirmation
-                        rvi_val = advanced_indicators['rvi']
-                        if (decision['action'] == 'BUY' and rvi_val > 0.3) or \
-                           (decision['action'] == 'SELL' and rvi_val < -0.3):
-                            confidence_boost += 0.10
-                            confirmations.append(f"Strong RVI ({rvi_val:.2f})")
-                            print(f"✓ GOLD Confirmation #3: RVI momentum aligned ({rvi_val:.2f})")
-                        
-                        # Apply boost
-                        if confidence_boost > 0:
-                            original_confidence = decision.get('confidence_score', 0.7)
-                            decision['confidence_score'] = min(original_confidence + confidence_boost, 0.95)  # Cap at 0.95
-                            decision['reasoning_summary'] = f"{decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
-                            print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
-                    
             # E. Execution Logic
             if decision['action'] in ["BUY", "SELL"]:
                 # Position Sizing
