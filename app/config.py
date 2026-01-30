@@ -6,33 +6,31 @@ import MetaTrader5 as mt5
 load_dotenv()
 
 class Config:
-    # Trading Settings
-    SYMBOL = os.getenv("SYMBOL", "EURUSD") # Default to EURUSD
+    # Trading Settings - OPTIMIZED FOR XAUUSD (GOLD)
+    SYMBOL = os.getenv("SYMBOL", "XAUUSD")  # Gold trading
     TIMEFRAME = mt5.TIMEFRAME_M15  # 15 Minute candles
     RISK_PER_TRADE = 0.01          # 1% risk per trade
-    STOP_LOSS_ATR_MULTIPLIER = 1.5 # Default fallback
+    
+    # GOLD-SPECIFIC: Wider stops for volatility
+    STOP_LOSS_ATR_MULTIPLIER = 2.5  # Was 1.5, now 2.5 for Gold's swings
     
     # Modes
     # If BACKTEST_MODE is True, we don't send orders to MT5, just log them.
     BACKTEST_MODE = os.getenv("BACKTEST_MODE", "true").lower() == "true"
     
-    # Cost Optimization
+    # Cost Optimization - GOLD SPREADS
     SMART_FILTER = os.getenv("SMART_FILTER", "true").lower() == "true"
-    MAX_OPEN_TRADES = 3 # Pyramiding Limit
+    MAX_OPEN_TRADES = 3 # Pyramiding Limit (keep conservative for Gold)
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
     OVERRIDE_TIME_GUARD = True # STRICTLY FOR DEBUGGING/TESTING. Ignore Market Hours.
     
-    # Execution Aggressiveness (0.0 = Passive, 1.0 = Aggressive)
-    # Controls ADX threshold, alignment cutoff, and other filters
-    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.6"))  # Balanced default
+    # Execution Aggressiveness - GOLD OPTIMIZED
+    # 0.7 = Slightly aggressive (Gold moves fast, need to catch momentum)
+    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.7"))  # Was 0.6, now 0.7 for Gold
     
-    # PHASE 5C: Multi-Symbol Trading
-    # Note: Exness uses suffixes like 'EURUSDm', IC Markets uses '.r', etc.
-    # The symbol_mapper will handle broker-specific formats
-    SYMBOLS = os.getenv("SYMBOLS", "EURUSD,GBPUSD,USDJPY").split(",")
-    BROKER = os.getenv("BROKER", "exness").lower()  # For symbol mapping
-    MAX_SYMBOLS_ACTIVE = int(os.getenv("MAX_SYMBOLS_ACTIVE", "3"))  # Max concurrent
-    ENABLE_MULTI_SYMBOL = os.getenv("ENABLE_MULTI_SYMBOL", "false").lower() == "true"
+    # GOLD-SPECIFIC: Spread tolerance
+    MAX_SPREAD_PIPS = 5.0  # Gold can have 2-5 pip spreads
+    MAX_SPREAD_POINTS = 50  # 50 points for Gold (vs 20 for forex)
     
     # Phase 68: Dynamic Risk
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL

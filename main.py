@@ -179,6 +179,25 @@ def main():
             if alignment_score < 0:
                  regime_tag += " [⛔ MTF MISMATCH - BLOCKED]"
             
+            # PHASE 6: GOLD ADVANCED INDICATOR CONFIRMATIONS
+            # Calculate VWAP and SuperTrend for entry quality
+            from app.ta_lib import TALib
+            
+            vwap = TALib.calculate_vwap(df)
+            supertrend = TALib.calculate_supertrend(df, period=10, multiplier=3.0)
+            rvi = TALib.calculate_rvi(df, period=14)
+            
+            # Store for later use in decision enhancement
+            advanced_indicators = {
+                'vwap': vwap,
+                'supertrend': supertrend,
+                'rvi': rvi
+            }
+            
+            print(f"🔍 GOLD Advanced Indicators: VWAP={vwap:.5f}, SuperTrend={supertrend['trend']} at {supertrend['level']:.5f}, RVI={rvi:.2f}")
+            
+            market_summary = f"{market_summary}\n\n📊 REGIME: {regime_tag}\n🧠 BIF Stats (M15): Hurst={bif_stats['hurst']:.2f}, Entropy={bif_stats['entropy']:.2f}, Alignment={alignment_score:.2f}"
+            
             bif_context = f"""
 === MARKET REGIME ANALYSIS (BIF ENGINE) ===
 Regime: {regime_tag}
@@ -217,12 +236,12 @@ Current Leader: {darwin.leader.name}
                  # Check volatility
                  adx = latest_indicators.get('adx', 0)
                  
-                 # UPDATED: More lenient thresholds based on EXECUTION_MODE
-                 # ADX threshold: 10 (aggressive) to 15 (passive)
-                 adx_threshold = 10 + (5 * (1 - Config.EXECUTION_MODE))
+                 # GOLD OPTIMIZED: Lower ADX threshold (Gold trends HARD once it starts)
+                 # ADX threshold: 8 (aggressive) to 13 (passive)
+                 adx_threshold = 8 + (5 * (1 - Config.EXECUTION_MODE))
                  
-                 # Alignment threshold: -0.5 (passive) to 0.0 (aggressive)
-                 alignment_threshold = -0.5 + (0.5 * Config.EXECUTION_MODE)
+                 # Alignment threshold: -0.6 (passive) to -0.1 (aggressive)
+                 alignment_threshold = -0.6 + (0.5 * Config.EXECUTION_MODE)
                  
                  # Only block if BOTH conditions are extreme
                  if adx < adx_threshold and alignment_score < alignment_threshold:
@@ -356,7 +375,49 @@ Current Leader: {darwin.leader.name}
                     print("DEBUG: Logged to CSV.", flush=True)
                 except Exception as e:
                     print(f"DEBUG: Failed to log decision: {e}", flush=True)
-
+                
+                # Override decision if AI provided one
+                if analyzed_decision.get("action") in ["BUY", "SELL", "HOLD"]:
+                    decision = analyzed_decision
+                    
+                    # PHASE 6: GOLD ENTRY CONFIRMATION - Boost confidence with advanced indicators
+                    if decision['action'] in ['BUY', 'SELL']:
+                        confidence_boost = 0.0
+                        confirmations = []
+                        
+                        # VWAP Confirmation (Institutional level)
+                        if decision['action'] == 'BUY' and current_price > advanced_indicators['vwap']:
+                            confidence_boost += 0.15
+                            confirmations.append("VWAP Support (Institutions Buying)")
+                            print(f"✓ GOLD Confirmation #1: Price above VWAP ({advanced_indicators['vwap']:.5f})")
+                        elif decision['action'] == 'SELL' and current_price < advanced_indicators['vwap']:
+                            confidence_boost += 0.15
+                            confirmations.append("VWAP Resistance (Institutions Selling)")
+                            print(f"✓ GOLD Confirmation #1: Price below VWAP ({advanced_indicators['vwap']:.5f})")
+                        
+                        # SuperTrend Confirmation (Trend alignment)
+                        st_trend = advanced_indicators['supertrend']['trend']
+                        if (decision['action'] == 'BUY' and st_trend == 'UP') or \
+                           (decision['action'] == 'SELL' and st_trend == 'DOWN'):
+                            confidence_boost += 0.12
+                            confirmations.append(f"SuperTrend {st_trend}")
+                            print(f"✓ GOLD Confirmation #2: SuperTrend aligned ({st_trend} at {advanced_indicators['supertrend']['level']:.5f})")
+                        
+                        # RVI Momentum Confirmation
+                        rvi_val = advanced_indicators['rvi']
+                        if (decision['action'] == 'BUY' and rvi_val > 0.3) or \
+                           (decision['action'] == 'SELL' and rvi_val < -0.3):
+                            confidence_boost += 0.10
+                            confirmations.append(f"Strong RVI ({rvi_val:.2f})")
+                            print(f"✓ GOLD Confirmation #3: RVI momentum aligned ({rvi_val:.2f})")
+                        
+                        # Apply boost
+                        if confidence_boost > 0:
+                            original_confidence = decision.get('confidence_score', 0.7)
+                            decision['confidence_score'] = min(original_confidence + confidence_boost, 0.95)  # Cap at 0.95
+                            decision['reasoning_summary'] = f"{decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
+                            print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
+                    
             # E. Execution Logic
             if decision['action'] in ["BUY", "SELL"]:
                 # Position Sizing
@@ -391,9 +452,9 @@ Current Leader: {darwin.leader.name}
                 
                 else:
                     # STANDARD LOGIC
-                    sl_mult = decision.get("stop_loss_atr_multiplier", 1.5)
+                    sl_mult = decision.get("stop_loss_atr_multiplier", 2.5)  # GOLD: Default 2.5 (vs 1.5 forex)
                     
-                    # PHASE 5A: ADAPTIVE STOP LOSS based on Market Regime
+                    # PHASE 5A + GOLD: ADAPTIVE STOP LOSS based on Market Regime
                     # Get BIF metrics from MTF data
                     mtf_analysis = mtf_data.get('analysis', {})
                     mtf_stats = mtf_analysis.get('mtf_stats', {})
@@ -401,19 +462,20 @@ Current Leader: {darwin.leader.name}
                     hurst = m15_stats.get('hurst', 0.5)
                     entropy = m15_stats.get('entropy', 0.7)
                     
-                    # Trending Market (High Hurst): Wider stops to give trend room
+                    # GOLD OPTIMIZED: Wider adjustments for volatility
+                    # Trending Market (High Hurst): MUCH wider stops for Gold's explosive moves
                     if hurst > 0.6:
-                        sl_mult *= 1.3  # +30% wider in strong trends
-                        print(f"📊 Adaptive SL: Trending market (H={hurst:.2f}), widening stops by 30%")
-                    # Ranging Market (Low Hurst): Tighter stops
+                        sl_mult *= 1.5  # +50% wider in strong trends (vs 1.3x for forex)
+                        print(f"📊 Adaptive SL (GOLD): Trending market (H={hurst:.2f}), widening stops by 50%")
+                    # Ranging Market (Low Hurst): Moderate tightening (Gold ranges are still volatile)
                     elif hurst < 0.4:
-                        sl_mult *= 0.8  # -20% tighter in ranging
-                        print(f"📊 Adaptive SL: Ranging market (H={hurst:.2f}), tightening stops by 20%")
+                        sl_mult *= 0.9  # -10% tighter in ranging (vs 0.8x for forex, Gold needs room)
+                        print(f"📊 Adaptive SL (GOLD): Ranging market (H={hurst:.2f}), tightening stops by 10%")
                     
-                    # Low Entropy = More Certainty = Can use tighter stops
+                    # Low Entropy = More Certainty = Slightly tighter
                     if entropy < 0.5:
-                        sl_mult *= 0.9  # -10% in clear markets
-                        print(f"📊 Adaptive SL: Low entropy ({entropy:.2f}), tightening by 10%")
+                        sl_mult *= 0.95  # -5% in clear markets (vs 0.9x for forex)
+                        print(f"📊 Adaptive SL (GOLD): Low entropy ({entropy:.2f}), tightening by 5%")
                     
                     if decision['action'] == "BUY":
                         sl_price = current_price - (atr * sl_mult)

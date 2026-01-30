@@ -111,27 +111,28 @@ class ShadowStrategy(ABC):
             # Boost logic needs to check Class Name string AND Direction
             regime_trend = mtf_regime.get('trend', 'NEUTRAL') # Expecting 'BULLISH', 'BEARISH', 'RANGING'
             
+            # GOLD OPTIMIZED: Favor trend strategies more aggressively
             # A. TREND STRATEGIES (TrendHawk, MACD_Cross, Sniper)
             is_trend_strat = any(x in self.name for x in ["TrendHawk", "MACD_Cross", "Sniper"])
             if is_trend_strat:
-                if hurst > 0.55: # Trending Regime
-                    # Directional Matching
+                if hurst > 0.55: # Trending Regime - GOLD LOVES THIS
+                    # Directional Matching with HIGHER boost for Gold
                     if regime_trend == 'BULLISH':
-                        if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.3
-                        elif self.direction == 'SHORT': boost = 0.7
+                        if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x vs 1.3x forex
+                        elif self.direction == 'SHORT': boost = 0.6  # Penalize counter-trend harder
                     elif regime_trend == 'BEARISH':
-                        if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.3
-                        elif self.direction == 'LONG': boost = 0.7
+                        if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x
+                        elif self.direction == 'LONG': boost = 0.6
                 else: 
-                     # Not trending? Penalize slightly
-                     boost = 0.9
+                     # Not trending? Slight penalty (Gold ranges less often)
+                     boost = 0.85  # vs 0.9 for forex
 
             # B. MEAN REVERSION STRATEGIES (MeanReverter, RSI_Matrix)
             elif any(x in self.name for x in ["MeanRev", "RSI_Matrix"]):
                 if hurst < 0.45: # Mean Reversion Regime
                      boost = 1.2
                 else:
-                     boost = 0.8 # Don't mean revert in trends
+                     boost = 0.7 # Gold: Penalize MR harder in trends (vs 0.8x forex)
                 
         # 2. Drawdown Penalty (Stability)
         # 10% DD = 1.2 penalty divisor, 20% DD = 1.4

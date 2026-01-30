@@ -218,7 +218,8 @@ class IronCladRiskManager:
 
     def validate_spread(self, spread_points: int, max_spread: int = 20) -> bool:
         """
-        Returns False if spread is too high (e.g. > 2.0 pips / 20 points).
+        Returns False if spread is too high.
+        GOLD: Default 50 points (5 pips) vs 20 points for forex
         Protects against News spikes and Rollover hours.
         """
         if spread_points > max_spread:
