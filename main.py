@@ -482,8 +482,36 @@ Current Leader: {darwin.leader.name}
 
                 risk_distance = abs(current_price - sl_price)
                 
-                # Calculate units based on risk
-                units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
+                # BUG FIX #2: KELLY CRITERION POSITION SIZING
+                # Use Kelly when we have sufficient trading history (30+ trades)
+                # Otherwise fallback to fixed risk
+                
+                leader_stats = darwin.leader
+                has_history = len(leader_stats.trade_history) >= 30
+                
+                if has_history:
+                    # Calculate stats from leader's trade history
+                    wins = [t['pnl'] for t in leader_stats.trade_history if t['pnl'] > 0]
+                    losses = [abs(t['pnl']) for t in leader_stats.trade_history if t['pnl'] < 0]
+                    
+                    win_rate = len(wins) / len(leader_stats.trade_history) if leader_stats.trade_history else 0.5
+                    avg_win = sum(wins) / len(wins) if wins else 1.0
+                    avg_loss = sum(losses) / len(losses) if losses else 1.0
+                    
+                    # Use Kelly Criterion
+                    units = risk_manager.calculate_kelly_position(
+                        win_rate=win_rate,
+                        avg_win=avg_win,
+                        avg_loss=avg_loss,
+                        equity=account_info["equity"],
+                        current_price=current_price,
+                        sl_price=sl_price
+                    )
+                    print(f"📊 KELLY SIZING: WR={win_rate:.1%}, R:R={avg_win/avg_loss:.2f}, Units={units:.2f}")
+                else:
+                    # Fallback to fixed risk (not enough history)
+                    units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
+                    print(f"📊 FIXED RISK: {len(leader_stats.trade_history)} trades (need 30 for Kelly)")
                 
                 # PHASE 5A: CHRONOS CONFIDENCE WEIGHTING
                 # Scale position size based on Chronos simulation results
