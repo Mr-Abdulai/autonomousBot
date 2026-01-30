@@ -10,7 +10,7 @@ from app.risk_manager import IronCladRiskManager
 from app.execution_engine import ExecutionEngine
 from app.dashboard_logger import DashboardLogger
 from app.performance_analyzer import PerformanceAnalyzer
-from app.time_manager import TimeManager
+# BUG FIX #12: TimeManager removed - file doesn't exist
 from app.bif_brain import BIFBrain
 from app.darwin_engine import DarwinEngine
 from app.chronos import ChronosWeaver, ChronosArena
@@ -33,7 +33,7 @@ def main():
     executor = ExecutionEngine()
     dashboard = DashboardLogger()
     perf_analyzer = PerformanceAnalyzer()
-    time_manager = TimeManager()
+    # BUG FIX #12: time_manager removed - not used
     brain = BIFBrain()
     darwin = DarwinEngine() # Phase 83
     oracle = Oracle(ai_strategist) # Phase 90
