@@ -259,13 +259,11 @@ Current Leader: {darwin.leader.name}
                      run_ai = False
                      print(f"DEBUG: Smart Filter Active (ADX {adx:.1f}, Alignment {alignment_score:.2f}). Skipping Gates.", flush=True)
 
-            # Gate 0: Time Guard
-            if not time_manager.is_market_open():
-                 status = time_manager.get_session_status()
-                 decision['reasoning_summary'] = f"Time Guard: {status}"
-                 run_ai = False
-                 print(f"DEBUG: Gate 0 (Time) Blocked. Status: {status}", flush=True)
-                 # Note: News might happen pre-market? Unlikely for major pairs usually inside session, but be careful.
+            # BUG FIX #12: TimeManager removed - use Config.OVERRIDE_TIME_GUARD instead
+            # Market hours check removed (TimeManager file doesn't exist)
+            # User can control via OVERRIDE_TIME_GUARD=true in .env to trade 24/7
+            
+            run_ai = True
             
             # Gate 1: Spread Guard (Critical during News) - GOLD OPTIMIZED
             spread = latest_indicators.get('spread', 0)
