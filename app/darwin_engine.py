@@ -165,6 +165,10 @@ class TrendHawk(ShadowStrategy):
         high_x = prev_highs.iloc[-1]
         low_x = prev_lows.iloc[-1]
         
+        # Check for Insufficient Data (NaN)
+        if pd.isna(high_x) or pd.isna(low_x):
+             return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': "Insufficient Data for Period"}
+        
         # Trend Filter (Optional)
         is_bullish_trend = True
         is_bearish_trend = True
