@@ -244,12 +244,13 @@ class Sniper(ShadowStrategy):
     3. The 'Perfectionist': Only trades if multiple Timeframes align.
     """
     def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
-         if 'H1' not in mtf_data or mtf_data['H1'].empty:
+         # FIX: Use Generic HTF1 key (supports H1 or M15)
+         if 'HTF1' not in mtf_data or mtf_data['HTF1'].empty:
              return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
              
-         h1_df = mtf_data['H1']
+         h1_df = mtf_data['HTF1']
          h1_close = h1_df.iloc[-1]['close']
-         h1_ma = h1_df['close'].rolling(50).mean().iloc[-1] # Simple H1 Trend
+         h1_ma = h1_df['close'].rolling(50).mean().iloc[-1] # Simple HTF Trend (M15/H1)
          
          current_price = df.iloc[-1]['close']
          # FIX: Shift(1) here too
@@ -257,7 +258,7 @@ class Sniper(ShadowStrategy):
          low_20 = df['low'].shift(1).rolling(20).min().iloc[-1]
          ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
          
-         # ... (Rest of logic similar to TrendHawk but checking H1)
+         # ... (Rest of logic similar to TrendHawk but checking HTF1)
          action = "HOLD"
          sl = 0
          tp = 0
@@ -278,7 +279,7 @@ class Sniper(ShadowStrategy):
              if h1_close < h1_ma:
                  return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
                  
-         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "H1 Alignment Fail"}
+         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "HTF1 Alignment Fail"}
 
 class RSI_Matrix(ShadowStrategy):
     """
