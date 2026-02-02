@@ -30,7 +30,7 @@ class Config:
     
     # GOLD-SPECIFIC: Spread tolerance
     MAX_SPREAD_PIPS = 5.0  # Gold can have 2-5 pip spreads
-    MAX_SPREAD_POINTS = 50  # 50 points for Gold (vs 20 for forex)
+    MAX_SPREAD_POINTS = 500  # 500 points for Exness (3-digit) = 5.0 pips (vs 50 for 2-digit)
     
     # Phase 68: Dynamic Risk
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL
