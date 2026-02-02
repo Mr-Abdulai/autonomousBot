@@ -144,13 +144,14 @@ class ShadowStrategy(ABC):
 class TrendHawk(ShadowStrategy):
     """
     1. The 'Incumbent': Fractal Breakouts + Trend Following.
-    Params: 'period' (Lookback for High/Low)
+    Params: 'period', 'require_trend' (bool)
     """
     def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
         current_price = df.iloc[-1]['close']
         
-        # Dynamic Period
+        # Dynamic Period & Settings
         period = self.params.get('period', 20)
+        require_trend = self.params.get('require_trend', False) # OPTIMIZED: Default False to catch reversals
         
         # FIX 1: Robust Indicator Lookup (Handle Case Sensitivity)
         # Sensor sends 'ema_50', we want that.
@@ -164,8 +165,15 @@ class TrendHawk(ShadowStrategy):
         high_x = prev_highs.iloc[-1]
         low_x = prev_lows.iloc[-1]
         
-        # Trend Filter
-        if current_price > ema_50:
+        # Trend Filter (Optional)
+        is_bullish_trend = True
+        is_bearish_trend = True
+        
+        if require_trend:
+             is_bullish_trend = current_price > ema_50
+             is_bearish_trend = current_price < ema_50
+        
+        if is_bullish_trend:
             # Bullish Breakout
             if current_price >= high_x:
                 p_sl = low_x 
@@ -175,7 +183,7 @@ class TrendHawk(ShadowStrategy):
             else:
                  return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"Price {current_price:.5f} < Breakout {high_x:.5f}"}
                 
-        elif current_price < ema_50:
+        elif is_bearish_trend:
             # Bearish Breakout
             if current_price <= low_x:
                 p_sl = high_x 
@@ -217,11 +225,13 @@ class MeanReverter(ShadowStrategy):
         
         # Fade Highs (Sell at Top of Range)
         if close > my_upper and rsi > 70:
-            return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': ema_50}
+            # OPTIMIZED: Target Basis (SMA20) not EMA50 (too far)
+            return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': basis}
             
         # Fade Lows (Buy at Bottom of Range)
         if close < my_lower and rsi < 30:
-            return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': ema_50}
+            # OPTIMIZED: Target Basis
+            return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis}
             
         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Inside Bands"}
 
@@ -282,6 +292,17 @@ class RSI_Matrix(ShadowStrategy):
     def _generate_raw_signal(self, df, indicators, mtf_data):
         # FIX: Robust Key Lookup (Sensor uses 'rsi', legacy uses 'RSI_14')
         rsi = indicators.get('rsi', indicators.get('RSI_14', 50))
+        
+        # OPTIMIZED: Regime Filter (Don't fade strong trends)
+        hurst = 0.5
+        try:
+             # Extract Hurst from mtf_data['analysis']['M15']['hurst'] if available
+             hurst = mtf_data.get('analysis', {}).get('M15', {}).get('hurst', 0.5)
+        except:
+             pass
+             
+        if hurst > 0.6:
+             return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f"Hurst {hurst:.2f} (Trending) - Unsafe for MeanRev"}
         
         # Logic: Buy Low, Sell High
         if rsi < self.lower:

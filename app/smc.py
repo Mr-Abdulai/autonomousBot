@@ -137,7 +137,9 @@ class SMCEngine:
                         "mitigated": False
                     }
                     # Check Mitigation
-                    future_lows = df['low'].iloc[i+5:]
+                    # FIXED: Only check fast-forward future. 
+                    # If current price is inside, it is NOT mitigated yet (it's active).
+                    future_lows = df['low'].iloc[i+5:-1] # Exclude current candle
                     if not future_lows.empty and future_lows.min() <= ob['price_top']:
                         ob['mitigated'] = True
                     
@@ -156,7 +158,7 @@ class SMCEngine:
                         "mitigated": False
                     }
                     # Check Mitigation
-                    future_highs = df['high'].iloc[i+5:]
+                    future_highs = df['high'].iloc[i+5:-1] # Exclude current candle
                     if not future_highs.empty and future_highs.max() >= ob['price_bottom']:
                         ob['mitigated'] = True
                         

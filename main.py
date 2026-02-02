@@ -332,8 +332,8 @@ Current Leader: {darwin.leader.name}
                         signal_type=sim_action, 
                         futures=futures, 
                         entry_price=current_price, 
-                        sl_dist=atr_val * sl_multiplier, # Use adaptive SL
-                        tp_dist=atr_val * 2.0
+                        sl_dist=atr_val * 1.5, # FIXED: Tighter SL for Simulation (was 2.5) to test accuracy
+                        tp_dist=atr_val * 3.0  # FIXED: Wider TP (Reward > Risk) 
                     )
                     
                     print(f"🔮 Chronos Output: {sim_result['recommendation']} (WinRate: {sim_result['win_rate']:.2f}, Survival: {sim_result['survival_rate']:.2f})")
