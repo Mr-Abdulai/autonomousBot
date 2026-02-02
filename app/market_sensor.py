@@ -151,9 +151,9 @@ class MarketSensor:
             return df
             
         return {
-            'BASE': _fetch(self.timeframe),  # The Active Timeframe (M5 or M15)
-            'HTF1': _fetch(mt5.TIMEFRAME_H1), # 1 hour
-            'HTF2': _fetch(mt5.TIMEFRAME_H4)  # 4 hour
+            'BASE': _fetch(self.timeframe),  # The Active Timeframe (M5)
+            'HTF1': _fetch(mt5.TIMEFRAME_M15), # 15 min (Middle)
+            'HTF2': _fetch(mt5.TIMEFRAME_H4)  # 4 hour (Macro)
         }
 
     def calculate_indicators(self, df):

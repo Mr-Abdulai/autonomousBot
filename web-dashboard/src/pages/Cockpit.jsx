@@ -279,17 +279,17 @@ const TrendCompass = ({ d1, h4, m15 }) => {
             <div className="text-[10px] text-slate-500 uppercase tracking-widest text-center">Trend Compass</div>
             <div className="flex justify-between items-center px-2">
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-slate-400 mb-1">D1</span>
+                    <span className="text-xs text-slate-400 mb-1">H4</span>
                     {getIcon(d1)}
                 </div>
                 <div className="w-px h-8 bg-slate-800"></div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-slate-400 mb-1">H4</span>
+                    <span className="text-xs text-slate-400 mb-1">M15</span>
                     {getIcon(h4)}
                 </div>
                 <div className="w-px h-8 bg-slate-800"></div>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-slate-400 mb-1">M15</span>
+                    <span className="text-xs text-slate-400 mb-1">M5</span>
                     {getIcon(m15)}
                 </div>
             </div>

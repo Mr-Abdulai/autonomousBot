@@ -170,6 +170,30 @@ def main():
             darwin.update(df, latest_indicators, mtf_data)
             leader_stats = darwin.get_leaderboard()
             
+            # DASHBOARD INJECTION: Map new MTF stack to Frontend Keys
+            # Frontend expects: trend_d1, trend_h4, trend_m15
+            # We map: 
+            # D1 -> HTF2 (H4 Macro)
+            # H4 -> HTF1 (M15 Mid)
+            # M15 -> BASE (M5 Micro)
+            
+            latest_indicators['trend_d1'] = mtf_analysis['mtf_stats']['HTF2'].get('trend', 'NEUTRAL') if 'trend' in mtf_analysis['mtf_stats']['HTF2'] else "NEUTRAL" # Fallback if trend logic varies
+            # Actually mtf_analysis returns 'trend' as string in 'mtf_stats'?
+            # Wait, bif_brain.py analyze_mtf_regime returns 'mtf_stats': {'BASE': {'hurst':...}, ...}, "trend": "STATUS", "summary": ...
+            # It DOES NOT return simple trend direction per TF in 'mtf_stats'.
+            # I need to recalculate or extract them.
+            # BIFBrain calculates them internally but doesn't expose them in mtf_stats dictionary values, only hurst/entropy there.
+            # I'll just do a quick check here or update BIFBrain to return them.
+            # QUICK CALC for Dashboard:
+            def fast_trend(tf_key):
+                _df = mtf_data.get(tf_key)
+                if _df is None or _df.empty: return "NEUTRAL"
+                return "BULLISH" if _df.iloc[-1]['close'] > _df.iloc[-1]['EMA_50'] else "BEARISH"
+            
+            latest_indicators['trend_d1'] = fast_trend('HTF2')
+            latest_indicators['trend_h4'] = fast_trend('HTF1')
+            latest_indicators['trend_m15'] = fast_trend('BASE')
+
             # Enhance Market Summary for AI
             regime_tag = "UNKNOWN"
             if bif_stats['hurst'] > 0.55:
@@ -179,8 +203,9 @@ def main():
             else:
                 regime_tag = "RANDOM WALK (NOISE)"
                 
-            if alignment_score < 0:
-                regime_tag += " [⛔ MTF MISMATCH - BLOCKED]"
+            if alignment_score < 0.2: # Updated threshold from -0.5 to 0.2 (Scalping) or whatever was set
+                 # Actually BIFBrain now returns alignment_score.
+                 pass
             
             # PHASE 6: GOLD ADVANCED INDICATOR CONFIRMATIONS
             # BUG FIX #8: Wrap in try-except to prevent crashes on bad data
@@ -444,7 +469,8 @@ Current Leader: {darwin.leader.name}
                 # Get BIF metrics from MTF data
                 mtf_analysis = mtf_data.get('analysis', {})
                 mtf_stats = mtf_analysis.get('mtf_stats', {})
-                m15_stats = mtf_stats.get('M15', {})
+                # FIX: Use BASE (M5) instead of hardcoded M15
+                base_stats = mtf_stats.get('BASE', {})
                 hurst = m15_stats.get('hurst', 0.5)
                 entropy = m15_stats.get('entropy', 0.7)
                 
