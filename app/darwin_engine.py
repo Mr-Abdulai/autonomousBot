@@ -346,6 +346,49 @@ class MACD_Cross(ShadowStrategy):
                 
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
 
+class TrendPullback(ShadowStrategy):
+    """
+    4. The 'Tactician': Buying Pullbacks in a defined Trend.
+    Logic:
+        LONG: Price > EMA200 (Trend) AND Price touches EMA20/50 (Value) AND RSI Not Overbought.
+    """
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        current_price = df.iloc[-1]['close']
+        
+        # 1. Trend Filter (Must be established)
+        ema_200 = indicators.get('ema_200', indicators.get('EMA_200', 0))
+        if ema_200 == 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        
+        # 2. Value Zones
+        ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
+        # ema_20 not standard in Sensor, estimate or use close proxy for now? 
+        # Actually, let's use EMA 50 as the main "Value Zone" as it is robust.
+        
+        rsi = indicators.get('rsi', indicators.get('RSI_14', 50))
+        
+        # LONG SETUP
+        if current_price > ema_200:
+            # Pullback Condition: Price is close to EMA 50 (within 0.2%) OR has dipped below it recently
+            # Simple check: Price < EMA 50 * 1.002 (Touching or below)
+            # But must be > EMA 200 (Trend is up)
+            if current_price <= (ema_50 * 1.002) and current_price > ema_200:
+                # Validation: RSI not crashed (<30 bad, >70 bad). Ideal 35-55.
+                if 35 < rsi < 60:
+                     # Stop Loss: Recent Low or fixed ATR. Let's use 1.5% fixed for robustness
+                     sl = current_price * 0.985
+                     tp = current_price * 1.03 # 1:2 R:R
+                     return {'action': 'BUY', 'confidence': 0.85, 'sl': sl, 'tp': tp, 'reason': "EMA50 Pullback (Trend Up)"}
+                     
+        # SHORT SETUP
+        elif current_price < ema_200:
+            if current_price >= (ema_50 * 0.998) and current_price < ema_200:
+                 if 40 < rsi < 65:
+                     sl = current_price * 1.015
+                     tp = current_price * 0.97
+                     return {'action': 'SELL', 'confidence': 0.85, 'sl': sl, 'tp': tp, 'reason': "EMA50 Pullback (Trend Down)"}
+
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+
 class DarwinEngine:
     def __init__(self):
         self.strategies = []
@@ -387,6 +430,11 @@ class DarwinEngine:
         # 5. The Sniper (Expert)
         # 1 Variant
         self.strategies.append(Sniper("Sniper_Elite", direction='BOTH'))
+        
+        # 6. TrendPullback (The Gap Filler)
+        # 2 Variants (Standard)
+        self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
+        self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
         
         print(f"🐝 Darwin Swarm Initialized: {len(self.strategies)} Active Strategies.")
         

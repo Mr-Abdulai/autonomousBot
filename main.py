@@ -53,22 +53,25 @@ def main():
     print("Entering Main Loop...")
     
     # 4. Main Loop
+    # Initialize Safe Defaults once
+    account_info = {
+        "equity": 10000.0 if Config.BACKTEST_MODE else 0.0, # SAFETY: 0.0 for live to prevent trading on ghosts
+        "balance": 10000.0 if Config.BACKTEST_MODE else 0.0,
+        "profit": 0.0,
+        "margin": 0.0,
+        "margin_free": 10000.0 if Config.BACKTEST_MODE else 0.0,
+        "name": "Sim",
+        "server": "SimServer",
+        "currency": "USD",
+        "leverage": 100,
+        "daily_pnl": 0.0,
+        "total_pnl": 0.0
+    }
+    
     while True:
         try:
-            # Gather Account Info
-            account_info = {
-                "equity": 10000.0,
-                "balance": 10000.0,
-                "profit": 0.0,
-                "margin": 0.0,
-                "margin_free": 10000.0,
-                "name": "Sim",
-                "server": "SimServer",
-                "currency": "USD",
-                "leverage": 100,
-                "daily_pnl": 0.0,
-                "total_pnl": 0.0
-            }
+            # Refresh Account Info (Partial Update)
+
             if not Config.BACKTEST_MODE and mt5.initialize():
                 acc = mt5.account_info()
                 if acc:

@@ -204,13 +204,13 @@ class IronCladRiskManager:
                 return 0.01
             
             units = risk_amount / risk_per_unit
-            lots = units / 100000  # Convert to MT5 lots
-            lots = max(0.01, round(lots, 2))  # Min 0.01, round to 2 decimals
             
-            print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, Half-Kelly={safe_kelly:.3f}")
-            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {lots:.2f} lots (vs {self.risk_per_trade:.2%} standard)")
+            # FIXED: Return UNITS. Do NOT convert to lots here (Execution Engine does it).
+            # The previous code blindly divided by 100,000 which crushed Gold trades.
             
-            return lots
+            print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, RiskPct={kelly_risk_pct:.2%}")
+            
+            return units
             
         except Exception as e:
             print(f"Kelly Calculation Error: {e}, falling back to standard sizing")
