@@ -143,7 +143,8 @@ class BIFBrain:
         elif htf2_trend == "BEARISH" and base_trend == "BULLISH" and base_hurst > 0.60:
             alignment_score = 0.5
             scout_mode = True
-            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT"} # Only sell rallies
+            # FIX: Added TrendPullback (it is designed exactly for this)
+            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT"} # Only sell rallies
             trend_status = "BEARISH_PULLBACK"
 
         # 3. CHOPPY MARKET (Range)
@@ -152,7 +153,8 @@ class BIFBrain:
              is_fighting_trend = (htf1_hurst > 0.55 or htf2_hurst > 0.55)
              
              alignment_score = 0.5
-             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
+             # Mean Reversion dominates, but TrendPullback can catch breakout retests
+             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT"}
              trend_status = "RANGING"
              
              if is_fighting_trend:
