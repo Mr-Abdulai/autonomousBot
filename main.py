@@ -344,7 +344,7 @@ Current Leader: {darwin.leader.name}
                         print("DEBUG: Gate 4 (Chronos) Blocked.", flush=True)
                     else:
                         print("DEBUG: Gate 4 Passed. Simulation confirmed.", flush=True)
-                        market_summary += f"\n[SIMULATION VERIFIED] Chronos Win Rate: {sim_result['win_rate']:.2f} (Survivor: {sim_result['survival_rate']:.2f})"
+                        market_summary += f"\n[GATE 4 PASSED] [SIMULATION VERIFIED] Chronos Win Rate: {sim_result['win_rate']:.2f} (Survivor: {sim_result['survival_rate']:.2f})"
                         
                         # PHASE 5A: Store Chronos result for position scaling
                         decision['chronos_result'] = sim_result
