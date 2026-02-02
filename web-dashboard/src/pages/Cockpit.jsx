@@ -269,8 +269,9 @@ const MetricCard = ({ title, value, sub }) => (
 const TrendCompass = ({ d1, h4, m15 }) => {
     const getIcon = (trend) => {
         if (!trend) return <span className="text-slate-600">-</span>;
-        if (trend.includes("Bullish")) return <TrendingUp className="w-4 h-4 text-green-400" />;
-        if (trend.includes("Bearish")) return <TrendingUp className="w-4 h-4 text-red-400 transform rotate-180" />;
+        const t = trend.toUpperCase();
+        if (t.includes("BULLISH")) return <TrendingUp className="w-4 h-4 text-green-400" />;
+        if (t.includes("BEARISH")) return <TrendingUp className="w-4 h-4 text-red-400 transform rotate-180" />;
         return <span className="text-slate-400">-</span>;
     };
 
