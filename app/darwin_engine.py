@@ -280,7 +280,8 @@ class RSI_Matrix(ShadowStrategy):
         self.upper = upper
 
     def _generate_raw_signal(self, df, indicators, mtf_data):
-        rsi = indicators.get('RSI_14', 50)
+        # FIX: Robust Key Lookup (Sensor uses 'rsi', legacy uses 'RSI_14')
+        rsi = indicators.get('rsi', indicators.get('RSI_14', 50))
         
         # Logic: Buy Low, Sell High
         if rsi < self.lower:
@@ -306,8 +307,8 @@ class MACD_Cross(ShadowStrategy):
     def _generate_raw_signal(self, df, indicators, mtf_data):
         # Note: MarketSensor provides 'macd' and 'macd_signal' (12,26,9) standard
         
-        macd_line = indicators.get('macd', 0)
-        signal_line = indicators.get('macd_signal', 0)
+        macd_line = indicators.get('macd', indicators.get('MACD', 0))
+        signal_line = indicators.get('macd_signal', indicators.get('MACDs', 0))
         
         current_price = df.iloc[-1]['close']
         
