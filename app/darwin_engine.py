@@ -622,7 +622,9 @@ class DarwinEngine:
             sig = juror.generate_signal(df, indicators, mtf_data)
             action = sig['action']
             votes[action] = votes.get(action, 0) + 1
-            reasons.append(f"{juror.name}: {action}")
+            # ENHANCED LOGGING: Show the reason!
+            reason_stub = sig.get('reason', 'No Signal')
+            reasons.append(f"{juror.name}: {action} [{reason_stub}]")
             
         # Decision Logic
         final_action = "HOLD"
