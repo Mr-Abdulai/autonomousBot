@@ -664,6 +664,23 @@ class DarwinEngine:
         # Final fallback: just take top N if still not enough
         if len(jury) == 0:
             jury = candidates[:top_n]
+            
+        # === ROOKIE PROTECTION / SCOUT PROTOCOL ===
+        # If we have a new strategy with 0 trades, it will never get picked if score is low.
+        # We must FORCE it into the Jury occasionally to test it.
+        # Logic: 20% chance to swap the lowest scoring Juror with a Rookie (0 trades)
+        import random
+        if random.random() < 0.25: # 25% Chance per tick
+             rookies = [s for s in candidates if s.win_streak == 0 and s.loss_streak == 0 and s.name not in [j.name for j in jury]]
+             if rookies:
+                 rookie = random.choice(rookies)
+                 # Remove lowest scoring member of current jury
+                 if jury:
+                     # Sort jury by score temporarily to find weakest link
+                     jury.sort(key=lambda s: self.last_scores.get(s.name, 0))
+                     removed = jury.pop(0) # Remove weakest
+                     jury.append(rookie)
+                     print(f"🕵️ SCOUT PROTOCOL: Swapped {removed.name} for Rookie {rookie.name}")
         
         votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
         reasons = []
