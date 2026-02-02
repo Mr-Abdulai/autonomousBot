@@ -187,8 +187,11 @@ def main():
             # QUICK CALC for Dashboard:
             def fast_trend(tf_key):
                 _df = mtf_data.get(tf_key)
-                if _df is None or _df.empty: return "NEUTRAL"
-                return "BULLISH" if _df.iloc[-1]['close'] > _df.iloc[-1]['EMA_50'] else "BEARISH"
+                if _df is None or _df.empty or len(_df) < 50: return "NEUTRAL"
+                # FIX: Calculate EMA on the fly (raw data doesn't have it)
+                close = _df['close'].iloc[-1]
+                ema_50 = _df['close'].ewm(span=50).mean().iloc[-1]
+                return "BULLISH" if close > ema_50 else "BEARISH"
             
             latest_indicators['trend_d1'] = fast_trend('HTF2')
             latest_indicators['trend_h4'] = fast_trend('HTF1')
