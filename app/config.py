@@ -8,7 +8,7 @@ load_dotenv()
 class Config:
     # Trading Settings - OPTIMIZED FOR XAUUSD (GOLD)
     SYMBOL = os.getenv("SYMBOL", "XAUUSD")  # Gold trading
-    TIMEFRAME = mt5.TIMEFRAME_M15  # 15 Minute candles
+    TIMEFRAME = mt5.TIMEFRAME_M5   # SCALPING MODE: 5 Minute candles (3x more signals)
     RISK_PER_TRADE = 0.01          # 1% risk per trade
     
     # GOLD-SPECIFIC: Wider stops for volatility
@@ -20,13 +20,13 @@ class Config:
     
     # Cost Optimization - GOLD SPREADS
     SMART_FILTER = os.getenv("SMART_FILTER", "true").lower() == "true"
-    MAX_OPEN_TRADES = 3 # Pyramiding Limit (keep conservative for Gold)
+    MAX_OPEN_TRADES = 5 # Pyramiding Limit (Increased for Scalping)
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
     OVERRIDE_TIME_GUARD = True # STRICTLY FOR DEBUGGING/TESTING. Ignore Market Hours.
     
     # Execution Aggressiveness - GOLD OPTIMIZED
-    # 0.7 = Slightly aggressive (Gold moves fast, need to catch momentum)
-    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.7"))  # Was 0.6, now 0.7 for Gold
+    # 0.8 = Aggressive (Scalping needs speed)
+    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.8"))  # Was 0.6, now 0.7 for Gold
     
     # GOLD-SPECIFIC: Spread tolerance
     MAX_SPREAD_PIPS = 5.0  # Gold can have 2-5 pip spreads

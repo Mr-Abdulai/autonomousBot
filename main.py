@@ -283,11 +283,15 @@ Current Leader: {darwin.leader.name}
             # IGNORE IF NEWS SIGNAL
             # Gate 2: MTF Alignment Check (The Matrix)
             # IGNORE IF NEWS SIGNAL
+            # Gate 2: MTF Alignment Check (The Matrix)
+            # IGNORE IF NEWS SIGNAL
             print(f"DEBUG: Checking Gate 2. alignment_score={alignment_score}, run_ai={run_ai}", flush=True)
-            if run_ai and not news_signal and alignment_score < 0:
+            # SCALPING TWEAK: Relaxed alignment check. 
+            # 0.0 was too strict (blocked ranging markets). -0.5 allows "Weak Conflict" / Ranging.
+            if run_ai and not news_signal and alignment_score < -0.5:
                  decision['reasoning_summary'] = f"⛔ MTF MISMATCH. Score {alignment_score}. Waiting."
                  run_ai = False
-                 print("DEBUG: Gate 2 Blocked.", flush=True)
+                 print("DEBUG: Gate 2 Blocked (Severe Misalignment).", flush=True)
                  
             # Gate 3: Darwinian Signal (The Jury Protocol)
             # Gate 3: Darwinian Signal (The Jury Protocol)

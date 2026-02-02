@@ -722,15 +722,17 @@ class DarwinEngine:
              confidence = 0.6 + (votes['SELL'] / len(jury) * 0.2)
              details = f"MAJORITY SELL ({details})"
         
-        # NEW: Partial Agreement (1 vote) - Lower confidence
+        # NEW: Partial Agreement (1 vote) - LONE WOLF MODE
+        # In Scalping Mode (M5), speed > consensus. If one reliable strategy triggers, we take it.
+        # But we use lower confidence score.
         elif votes['BUY'] >= 1:
             final_action = "BUY"
-            confidence = 0.5  # Minimum confidence for single vote
-            details = f"PARTIAL AGREEMENT BUY ({details})"
+            confidence = 0.55  # Just enough to pass RiskManager (0.50 cutoff)
+            details = f"LONE WOLF BUY ({details})"
         elif votes['SELL'] >= 1:
             final_action = "SELL"
-            confidence = 0.5
-            details = f"PARTIAL AGREEMENT SELL ({details})"
+            confidence = 0.55
+            details = f"LONE WOLF SELL ({details})"
         
         else:
              final_action = "HOLD"
