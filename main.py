@@ -163,7 +163,7 @@ def main():
             # INJECT Regime for Darwin 2.0 (Smart Scoring)
             mtf_data['analysis'] = mtf_analysis['mtf_stats']
             
-            bif_stats = mtf_analysis['mtf_stats']['M15']
+            bif_stats = mtf_analysis['mtf_stats']['BASE']
             alignment_score = mtf_analysis['alignment_score']
             
             # Phase 83: Darwinian Evolution (Update Strategies)
@@ -209,7 +209,7 @@ def main():
                     'rvi': 0.0  # Neutral momentum
                 }
             
-            market_summary = f"{market_summary}\n\n📊 REGIME: {regime_tag}\n🧠 BIF Stats (M15): Hurst={bif_stats['hurst']:.2f}, Entropy={bif_stats['entropy']:.2f}, Alignment={alignment_score:.2f}"
+            market_summary = f"{market_summary}\n\n📊 REGIME: {regime_tag}\n🧠 BIF Stats (BASE): Hurst={bif_stats['hurst']:.2f}, Entropy={bif_stats['entropy']:.2f}, Alignment={alignment_score:.2f}"
             
             bif_context = f"""
 === MARKET REGIME ANALYSIS (BIF ENGINE) ===

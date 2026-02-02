@@ -106,7 +106,7 @@ class ShadowStrategy(ABC):
         # 1. Regime Boost (Predictive Switching)
         boost = 1.0
         if mtf_regime:
-            hurst = mtf_regime.get('M15', {}).get('hurst', 0.5)
+            hurst = mtf_regime.get('BASE', {}).get('hurst', 0.5)
             
             # Boost logic needs to check Class Name string AND Direction
             regime_trend = mtf_regime.get('trend', 'NEUTRAL') # Expecting 'BULLISH', 'BEARISH', 'RANGING'

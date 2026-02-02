@@ -98,15 +98,15 @@ class BIFBrain:
             results[tf] = stats
             
         # 2. Compute Alignment
-        # Core Thesis: Lower TF (M15) provides Signal, Higher TF (H1) provides Permission.
+        # Core Thesis: Lower TF (BASE) provides Signal, Higher TF (HTF1) provides Permission.
         
-        m15_hurst = results.get('M15', {}).get('hurst', 0.5)
-        h1_hurst = results.get('H1', {}).get('hurst', 0.5)
-        h4_hurst = results.get('H4', {}).get('hurst', 0.5)
+        base_hurst = results.get('BASE', {}).get('hurst', 0.5)
+        htf1_hurst = results.get('HTF1', {}).get('hurst', 0.5)
+        htf2_hurst = results.get('HTF2', {}).get('hurst', 0.5)
         
         # Calculate Trends (Price vs EMA50)
         trends = {}
-        for tf in ['M15', 'H1', 'H4']:
+        for tf in ['BASE', 'HTF1', 'HTF2']:
             _df = data_dict.get(tf)
             if _df is not None and len(_df) > 50:
                 close = _df['close'].iloc[-1]
@@ -115,41 +115,41 @@ class BIFBrain:
             else:
                 trends[tf] = "NEUTRAL"
 
-        m15_trend = trends['M15']
-        h4_trend = trends['H4']
+        base_trend = trends['BASE']
+        htf2_trend = trends['HTF2']
         
         # Base Logic
         scout_mode = False
         allowed_strategies = {"ALL"} # Default
         
         # 1. PERFECT ALIGNMENT (The Easy Trade)
-        if m15_trend == h4_trend and m15_hurst > 0.55:
+        if base_trend == htf2_trend and base_hurst > 0.55:
             alignment_score = 1.0
             allowed_strategies = {"ALL"} # Full attack
-            trend_status = f"TRENDING_{m15_trend}"
+            trend_status = f"TRENDING_{base_trend}"
 
             
         # 2. THE SCOUT PROTOCOL (Tactical Counter-Trend)
-        # H4 is Bullish, but M15 is crashing (Bearish + High Hurst)
+        # HTF2 is Bullish, but BASE is crashing (Bearish + High Hurst)
         # We want to buy the dip.
-        elif h4_trend == "BULLISH" and m15_trend == "BEARISH" and m15_hurst > 0.60:
+        elif htf2_trend == "BULLISH" and base_trend == "BEARISH" and base_hurst > 0.60:
             alignment_score = 0.5 # Valid, but cautious
             scout_mode = True
             allowed_strategies = {"MeanReverter_LONG", "RSI_Matrix_LONG"} # Only buy dips
             trend_status = "BULLISH_PULLBACK"
             
-        # H4 is Bearish, but M15 is pumping (Bullish + High Hurst)
+        # HTF2 is Bearish, but BASE is pumping (Bullish + High Hurst)
         # We want to sell the rally.
-        elif h4_trend == "BEARISH" and m15_trend == "BULLISH" and m15_hurst > 0.60:
+        elif htf2_trend == "BEARISH" and base_trend == "BULLISH" and base_hurst > 0.60:
             alignment_score = 0.5
             scout_mode = True
             allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT"} # Only sell rallies
             trend_status = "BEARISH_PULLBACK"
 
         # 3. CHOPPY MARKET (Range)
-        elif m15_hurst < 0.45:
+        elif base_hurst < 0.45:
              # Check if we are fighting a higher timeframe trend (The Rebel Protocol)
-             is_fighting_trend = (h1_hurst > 0.55 or h4_hurst > 0.55)
+             is_fighting_trend = (htf1_hurst > 0.55 or htf2_hurst > 0.55)
              
              alignment_score = 0.5
              allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
@@ -166,7 +166,7 @@ class BIFBrain:
              # Markets spend 60-70% of time ranging, treat this as opportunity not threat
              alignment_score = 0.2  # Neutral-Positive (was -0.5)
              allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
-             trend_status = f"UNCLEAR ({m15_trend}/{h4_trend}) - Range Mode"
+             trend_status = f"UNCLEAR ({base_trend}/{htf2_trend}) - Range Mode"
 
         return {
              "mtf_stats": results,
@@ -174,7 +174,7 @@ class BIFBrain:
              "trend": trend_status,
              "scout_mode": scout_mode,
              "allowed_strategies": list(allowed_strategies),
-             "summary": f"M15:{m15_trend} | H4:{h4_trend} | Scout:{scout_mode}"
+             "summary": f"BASE:{base_trend} | HTF2:{htf2_trend} | Scout:{scout_mode}"
         }
 
     def _calculate_entropy(self, data: np.ndarray, bins: int = 20) -> float:
