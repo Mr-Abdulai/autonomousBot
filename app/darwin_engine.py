@@ -228,12 +228,12 @@ class MeanReverter(ShadowStrategy):
         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', close))
         
         # Fade Highs (Sell at Top of Range)
-        if close > my_upper and rsi > 70:
+        if close > my_upper and rsi > 65:
             # OPTIMIZED: Target Basis (SMA20) not EMA50 (too far)
             return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': basis}
             
         # Fade Lows (Buy at Bottom of Range)
-        if close < my_lower and rsi < 30:
+        if close < my_lower and rsi < 35:
             # OPTIMIZED: Target Basis
             return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis}
             
@@ -406,7 +406,7 @@ class DarwinEngine:
             
         # 2. MeanReverters (Standard Deviations)
         # 5 Deviations * 2 Directions = 10 Variants
-        devs = [1.5, 2.0, 2.5, 3.0, 3.5]
+        devs = [1.0, 1.5, 2.0, 2.5, 3.0]
         for d in devs:
             lbl = f"{d:.1f}SD"
             self.strategies.append(MeanReverter(f"MeanRev_LONG_{lbl}", direction="LONG", params={'std_dev': d}))

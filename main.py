@@ -393,46 +393,48 @@ Current Leader: {darwin.leader.name}
                 print("DEBUG: Calling Groq Strategist...", flush=True)
                 analyzed_decision = ai_strategist.get_trade_decision(market_summary, "")
                 print(f"DEBUG: Groq Response: {analyzed_decision}", flush=True)
-                decision = risk_manager.validate_signal(analyzed_decision)
-                
-                # BUG FIX #1: PHASE 6 GOLD ENTRY CONFIRMATION - Apply BEFORE logging!
+                # BUG FIX #1: PHASE 6 GOLD ENTRY CONFIRMATION - MOVED HERE
                 # Boost confidence with advanced indicators (VWAP, SuperTrend, RVI)
-                if decision['action'] in ['BUY', 'SELL']:
+                if analyzed_decision['action'] in ['BUY', 'SELL']:
                     confidence_boost = 0.0
                     confirmations = []
                     
                     # VWAP Confirmation (Institutional level)
-                    if decision['action'] == 'BUY' and current_price > advanced_indicators['vwap']:
+                    if analyzed_decision['action'] == 'BUY' and current_price > advanced_indicators['vwap']:
                         confidence_boost += 0.15
                         confirmations.append("VWAP Support (Institutions Buying)")
                         print(f"✓ GOLD Confirmation #1: Price above VWAP ({advanced_indicators['vwap']:.5f})")
-                    elif decision['action'] == 'SELL' and current_price < advanced_indicators['vwap']:
+                    elif analyzed_decision['action'] == 'SELL' and current_price < advanced_indicators['vwap']:
                         confidence_boost += 0.15
                         confirmations.append("VWAP Resistance (Institutions Selling)")
                         print(f"✓ GOLD Confirmation #1: Price below VWAP ({advanced_indicators['vwap']:.5f})")
                     
                     # SuperTrend Confirmation (Trend alignment)
                     st_trend = advanced_indicators['supertrend']['trend']
-                    if (decision['action'] == 'BUY' and st_trend == 'UP') or \
-                       (decision['action'] == 'SELL' and st_trend == 'DOWN'):
+                    if (analyzed_decision['action'] == 'BUY' and st_trend == 'UP') or \
+                       (analyzed_decision['action'] == 'SELL' and st_trend == 'DOWN'):
                         confidence_boost += 0.12
                         confirmations.append(f"SuperTrend {st_trend}")
                         print(f"✓ GOLD Confirmation #2: SuperTrend aligned ({st_trend} at {advanced_indicators['supertrend']['level']:.5f})")
                     
                     # RVI Momentum Confirmation
                     rvi_val = advanced_indicators['rvi']
-                    if (decision['action'] == 'BUY' and rvi_val > 0.3) or \
-                       (decision['action'] == 'SELL' and rvi_val < -0.3):
+                    if (analyzed_decision['action'] == 'BUY' and rvi_val > 0.3) or \
+                       (analyzed_decision['action'] == 'SELL' and rvi_val < -0.3):
                         confidence_boost += 0.10
                         confirmations.append(f"Strong RVI ({rvi_val:.2f})")
                         print(f"✓ GOLD Confirmation #3: RVI momentum aligned ({rvi_val:.2f})")
                     
                     # Apply boost
                     if confidence_boost > 0:
-                        original_confidence = decision.get('confidence_score', 0.7)
-                        decision['confidence_score'] = min(original_confidence + confidence_boost, 0.95)  # Cap at 0.95
-                        decision['reasoning_summary'] = f"{decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
-                        print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
+                        original_confidence = analyzed_decision.get('confidence_score', 0.5)
+                        analyzed_decision['confidence_score'] = min(original_confidence + confidence_boost, 0.95)  # Cap at 0.95
+                        analyzed_decision['reasoning_summary'] = f"{analyzed_decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
+                        print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {analyzed_decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
+
+                decision = risk_manager.validate_signal(analyzed_decision)
+                
+                # [MOVED UP] -> Inserted earlier
                 
             # Log State
             swarm_state = darwin.get_swarm_state()
@@ -474,8 +476,8 @@ Current Leader: {darwin.leader.name}
                 mtf_stats = mtf_analysis.get('mtf_stats', {})
                 # FIX: Use BASE (M5) instead of hardcoded M15
                 base_stats = mtf_stats.get('BASE', {})
-                hurst = m15_stats.get('hurst', 0.5)
-                entropy = m15_stats.get('entropy', 0.7)
+                hurst = base_stats.get('hurst', 0.5)
+                entropy = base_stats.get('entropy', 0.7)
                 
                 # GOLD OPTIMIZED: Wider adjustments for volatility
                 # Trending Market (High Hurst): MUCH wider stops for Gold's explosive moves

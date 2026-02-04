@@ -167,7 +167,7 @@ class BIFBrain:
              # UPDATED: FALLBACK Mode - Allow Mean Reversion in unclear conditions
              # Markets spend 60-70% of time ranging, treat this as opportunity not threat
              alignment_score = 0.2  # Neutral-Positive (was -0.5)
-             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT"}
+             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendHawk_LONG", "TrendHawk_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT"}
              trend_status = f"UNCLEAR ({base_trend}/{htf2_trend}) - Range Mode"
 
         return {
@@ -274,9 +274,16 @@ class BIFBrain:
             # Features
             X = df[['log_ret', 'volatility']].values
             
+            # CLEANING: Handle Inf/NaN created by Log of 0 or Volatility
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            
             # Scale
             X_scaled = self.scaler.fit_transform(X)
             
+            # CHECK: If all data is flattened to 0 (e.g. frozen market), HMM will crash
+            if np.all(X_scaled == 0):
+                return 0, [] # Return Range/Neutral state
+
             # Train (Fit on history)
             # Instantiating locally to avoid state accumulation warnings from hmmlearn
             # FIX: Use 'diag' covariance for stability on financial data. 

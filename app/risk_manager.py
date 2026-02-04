@@ -201,14 +201,12 @@ class IronCladRiskManager:
             risk_per_unit = abs(current_price - sl_price)
             
             if risk_per_unit == 0:
-                return 0.01
+                return 1.0 # Minimal unit
             
             units = risk_amount / risk_per_unit
             
-            # FIXED: Return UNITS. Do NOT convert to lots here (Execution Engine does it).
-            # The previous code blindly divided by 100,000 which crushed Gold trades.
-            
-            print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, RiskPct={kelly_risk_pct:.2%}")
+            print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, Half-Kelly={safe_kelly:.3f}")
+            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {units:.2f} units (vs {self.risk_per_trade:.2%} standard)")
             
             return units
             
@@ -216,20 +214,12 @@ class IronCladRiskManager:
             print(f"Kelly Calculation Error: {e}, falling back to standard sizing")
             return self.calculate_position_size(equity, current_price, sl_price)
 
-    def validate_spread(self, spread_points: int, max_spread: int = 500) -> bool:
+    def validate_spread(self, spread_points: int, max_spread: int = 20) -> bool:
         """
         Returns False if spread is too high.
-        GOLD: Updated to 500 points (5.0 pips) for 3-digit brokers (Exness).
+        GOLD: Default 50 points (5 pips) vs 20 points for forex
+        Protects against News spikes and Rollover hours.
         """
-        # Calculate approximate pips for clarity (Assuming 1 Pip = 10 Points standard, or 100 for 3-digit)
-        # We'll display both for user sanity.
-        # If Spread is > 100, it's likely a 3-digit broker (points).
-        approx_pips = spread_points / 100 if spread_points > 90 else spread_points / 10
-        
         if spread_points > max_spread:
-            print(f"⚠️ SPREAD HIGH: {spread_points} points (~{approx_pips:.1f} pips) > Limit {max_spread}")
             return False
-            
-        # Log normal spread occasionally or just return True
-        # print(f"✅ Spread Check: {spread_points} points (~{approx_pips:.1f} pips)")
         return True

@@ -30,6 +30,7 @@ class GroqStrategist:
             "You may ONLY enter if ONE of the following is true (AND confirmed by Gate 4):\n"
             "A. [SMC ORDER BLOCK]: Price is INSIDE a confirmed Order Block.\n"
             "B. [TREND BREAKOUT]: A validated Bill Williams Fractal Breakout + Confluence.\n"
+            "C. [JURY SIGNAL]: The Darwin Swarm has issued a High-Confidence Signal (Mean Reversion/Momentum).\n"
             "\n"
             "CRITICAL: INDICATORS (RSI/MACD) ARE CONFIRMATIONS ONLY.\n"
             "NEVER trade solely because 'RSI is low'. There MUST be a Structural Reason (OB or Fractal Break).\n"
