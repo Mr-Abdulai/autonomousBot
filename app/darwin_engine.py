@@ -464,9 +464,12 @@ class DarwinEngine:
                 try:
                     save_dt = datetime.fromisoformat(last_save_time)
                     hours_old = (datetime.now() - save_dt).total_seconds() / 3600
-                    if hours_old > 4:
-                        print(f"🧠 Memory is Stale ({hours_old:.1f}h). Applying MEMORY DECAY (50%).")
+                    if hours_old > 1.0: # Stale after 1 hour
+                        print(f"🧠 Memory is Stale ({hours_old:.1f}h). Applying HEAVY DECAY (50%).")
                         decay_factor = 0.5
+                    else:
+                        # Baseline Sleep Decay (Fresh Start Effect)
+                        decay_factor = 0.95
                 except:
                     pass
 
