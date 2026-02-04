@@ -136,11 +136,11 @@ class SMCEngine:
                         "index": i,
                         "mitigated": False
                     }
-                    # Check Mitigation
-                    # FIXED: Only check fast-forward future. 
-                    # If current price is inside, it is NOT mitigated yet (it's active).
-                    future_lows = df['low'].iloc[i+5:-1] # Exclude current candle
-                    if not future_lows.empty and future_lows.min() <= ob['price_top']:
+                    # Check Mitigation (VALIDITY CHECK)
+                    # FIX: Only invalidate if Price CLOSES below the OB (Broken Support)
+                    # Simply touching it (mitigation) is actually the entry trigger, so we keep it alive.
+                    future_closes = df['close'].iloc[i+5:-1]
+                    if not future_closes.empty and future_closes.min() < ob['price_bottom']:
                         ob['mitigated'] = True
                     
                     order_blocks.append(ob)
@@ -157,9 +157,10 @@ class SMCEngine:
                         "index": i,
                         "mitigated": False
                     }
-                    # Check Mitigation
-                    future_highs = df['high'].iloc[i+5:-1] # Exclude current candle
-                    if not future_highs.empty and future_highs.max() >= ob['price_bottom']:
+                    # Check Mitigation (VALIDITY CHECK)
+                    # FIX: Only invalidate if Price CLOSES above the OB (Broken Resistance)
+                    future_closes = df['close'].iloc[i+5:-1]
+                    if not future_closes.empty and future_closes.max() > ob['price_top']:
                         ob['mitigated'] = True
                         
                     order_blocks.append(ob)

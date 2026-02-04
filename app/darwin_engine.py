@@ -117,10 +117,10 @@ class ShadowStrategy(ABC):
             if is_trend_strat:
                 if hurst > 0.55: # Trending Regime - GOLD LOVES THIS
                     # Directional Matching with HIGHER boost for Gold
-                    if regime_trend == 'BULLISH':
+                    if 'BULLISH' in regime_trend:
                         if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x vs 1.3x forex
                         elif self.direction == 'SHORT': boost = 0.6  # Penalize counter-trend harder
-                    elif regime_trend == 'BEARISH':
+                    elif 'BEARISH' in regime_trend:
                         if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x
                         elif self.direction == 'LONG': boost = 0.6
                 else: 
