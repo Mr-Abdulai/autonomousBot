@@ -138,7 +138,14 @@ class ShadowStrategy(ABC):
         # 10% DD = 1.2 penalty divisor, 20% DD = 1.4
         penalty = 1 + (self.max_drawdown * 2.0) 
         
-        final_score = (base_score * boost) / penalty
+        # 3. Hot Hand Bonus (Speed of Adaptation)
+        # Accelerate promotion of strategies that are winning RIGHT NOW.
+        streak_bonus = 1.0
+        if self.win_streak >= 2: streak_bonus = 1.10 # +10%
+        if self.win_streak >= 3: streak_bonus = 1.25 # +25%
+        if self.win_streak >= 5: streak_bonus = 1.50 # +50% (On Fire)
+        
+        final_score = (base_score * boost * streak_bonus) / penalty
         return final_score
 
 class TrendHawk(ShadowStrategy):
@@ -605,7 +612,7 @@ class DarwinEngine:
             
         return signal
 
-    def get_consensus_signal(self, df, indicators, mtf_data, top_n=3) -> dict:
+    def get_consensus_signal(self, df, indicators, mtf_data, top_n=5) -> dict:
         """
         Phase 93: The Jury.
         Instead of following 1 leader, we poll the Top N strategies.
@@ -705,39 +712,48 @@ class DarwinEngine:
         details = " | ".join(reasons)
         
         # Check Unanimous
-        if votes['BUY'] == len(jury):
+        # Updated Consensus Logic for Top 5
+        buy_votes = votes['BUY']
+        sell_votes = votes['SELL']
+        total_votes = len(jury)
+        
+        # 1. UNANIMOUS (Strongest)
+        if buy_votes == total_votes:
             final_action = "BUY"
             confidence = 1.0
             details = f"UNANIMOUS BUY ({details})"
-        elif votes['SELL'] == len(jury):
+        elif sell_votes == total_votes:
             final_action = "SELL"
             confidence = 1.0
             details = f"UNANIMOUS SELL ({details})"
             
-        # UPDATED: Reduced Quorum - Allow single strong signal
-        # Check Majority (2+ votes)
-        elif votes['BUY'] >= 2:
-             final_action = "BUY"
-             # Scale confidence: 2/3 = 0.73, 3/3 = 0.80
-             confidence = 0.6 + (votes['BUY'] / len(jury) * 0.2)
-             details = f"MAJORITY BUY ({details})"
-        elif votes['SELL'] >= 2:
-             final_action = "SELL"
-             confidence = 0.6 + (votes['SELL'] / len(jury) * 0.2)
-             details = f"MAJORITY SELL ({details})"
-        
-        # NEW: Partial Agreement (1 vote) - LONE WOLF MODE
-        # In Scalping Mode (M5), speed > consensus. If one reliable strategy triggers, we take it.
-        # But we use lower confidence score.
-        elif votes['BUY'] >= 1:
+        # 2. MAJORITY (More votes than opposition AND at least 2)
+        elif buy_votes > sell_votes and buy_votes >= 2:
             final_action = "BUY"
-            confidence = 0.55  # Just enough to pass RiskManager (0.50 cutoff)
+            confidence = 0.6 + (buy_votes / total_votes * 0.3)
+            details = f"MAJORITY BUY {buy_votes}v{sell_votes} ({details})"
+        elif sell_votes > buy_votes and sell_votes >= 2:
+            final_action = "SELL"
+            confidence = 0.6 + (sell_votes / total_votes * 0.3)
+            details = f"MAJORITY SELL {sell_votes}v{buy_votes} ({details})"
+            
+        # 3. TIE / CONFLICT (2v2) -> HOLD
+        elif buy_votes == sell_votes and buy_votes >= 2:
+            final_action = "HOLD"
+            details = f"CONFLICT {buy_votes}v{sell_votes} ({details})"
+
+        # 4. LONE WOLF (1 vote vs 0 opposition)
+        # Scalping Mode: If 1 reliable leader sees it and others are asleep (HOLD), take it.
+        # But if 1 says BUY and 1 says SELL, it's a conflict.
+        elif buy_votes == 1 and sell_votes == 0:
+            final_action = "BUY"
+            confidence = 0.55
             details = f"LONE WOLF BUY ({details})"
-        elif votes['SELL'] >= 1:
+        elif sell_votes == 1 and buy_votes == 0:
             final_action = "SELL"
             confidence = 0.55
             details = f"LONE WOLF SELL ({details})"
-        
+            
         else:
              final_action = "HOLD"
              details = f"HUNG JURY ({details})"
