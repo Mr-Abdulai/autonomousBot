@@ -355,7 +355,7 @@ Current Leader: {darwin.leader.name}
                 features = {'price': current_price, 'atr': atr_val, 'volatility': current_vol}
                 
                 # Hybrid: Use Bootstrap if possible, else Monte Carlo
-                futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=12)
+                futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=48) # 4 Hours (was 12/1h)
                 
                 # 3. Simulate The Jury's Call
                 # Estimate TP/SL based on Decision (TrendHawk uses 2x Risk, etc)
@@ -368,7 +368,7 @@ Current Leader: {darwin.leader.name}
                         futures=futures, 
                         entry_price=current_price, 
                         sl_dist=atr_val * 1.5, # FIXED: Tighter SL for Simulation (was 2.5) to test accuracy
-                        tp_dist=atr_val * 3.0  # FIXED: Wider TP (Reward > Risk) 
+                        tp_dist=atr_val * 2.5  # FIXED: Slightly easier target (was 3.0) 
                     )
                     
                     print(f"🔮 Chronos Output: {sim_result['recommendation']} (WinRate: {sim_result['win_rate']:.2f}, Survival: {sim_result['survival_rate']:.2f})")
