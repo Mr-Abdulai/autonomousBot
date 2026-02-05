@@ -279,14 +279,21 @@ class Sniper(ShadowStrategy):
              sl = high_20
              tp = current_price - 2*(sl - current_price)
              
+         # MATCH DASHBOARD LOGIC (EMA 13/50 Cross)
+         h1_ema13 = h1_df['close'].ewm(span=13, adjust=False).mean().iloc[-1]
+         h1_ema50 = h1_df['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+         
+         is_h1_bullish = h1_ema13 > h1_ema50
+         is_h1_bearish = h1_ema13 < h1_ema50
+              
          if action == 'BUY':
-             if h1_close > h1_ma:
+             if is_h1_bullish:
                  return {'action': 'BUY', 'confidence': 0.95, 'sl': sl, 'tp': tp}
          elif action == 'SELL':
-             if h1_close < h1_ma:
+             if is_h1_bearish:
                  return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
                  
-         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "HTF1 Alignment Fail"}
+         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (M5={action}, HTF1_EMA13={h1_ema13:.2f}/EMA50={h1_ema50:.2f})"}
 
 class RSI_Matrix(ShadowStrategy):
     """
