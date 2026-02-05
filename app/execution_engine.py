@@ -225,18 +225,26 @@ class ExecutionEngine:
             if action == "BUY":
                 profit = current_price - entry_price
                 
-                # FLASH SCALP LOGIC (Greedy Exit)
-                # If price covers 40% of distance to TP, CLOSE FULL POSITION.
+                # BANK & RUNNER LOGIC (Greedy but Safe)
+                # If price covers 40% of distance to TP:
+                # 1. Close 50% of the trade (Bank Cash)
+                # 2. Move SL to Break Even (Risk Free Runner)
                 tp_dist = abs(tp - entry_price)
                 if tp_dist > 0 and profit >= (0.4 * tp_dist):
-                    if self.close_trade(ticket):
-                        print(f"💰 FLASH SCALP: Target Hit (40% TP). Closing Full Position {ticket}.")
-                        return  # Stop processing this trade (it's closed)
+                    if self.close_partial(ticket, 0.5):
+                        print(f"💰 BANK & RUNNER: Target Hit (40% TP). Closed 50% of {ticket}.")
+                        # IMMEDIATE BREAK EVEN
+                        new_sl = entry_price + (atr * 0.1)
+                        modification_reason = "Bank & Runner (BE Secured)"
+                        # We do NOT return, we continue to let the modification happen below if needed, 
+                        # but actually we set new_sl here so it will trigger modification.
 
-                # Trigger 1: Break Even (Profit > 1.0 * Risk)
+                # Trigger 1: Break Even (Profit > 1.0 * Risk) - Standard Trail
                 if profit > (1.0 * risk) and current_sl < entry_price:
-                    new_sl = entry_price + (atr * 0.1) 
-                    modification_reason = "Break-Even (+1R)"
+                    # Only move if we haven't already moved it via Bank & Runner
+                    if new_sl is None: 
+                        new_sl = entry_price + (atr * 0.1) 
+                        modification_reason = "Break-Even (+1R)"
                 
                 # Trigger 2: Fractal Trailing (Profit > 2.0 * Risk)
                 elif profit > (2.0 * risk):
@@ -249,12 +257,20 @@ class ExecutionEngine:
             elif action == "SELL":
                 profit = entry_price - current_price
                 
-                # FLASH SCALP LOGIC (Greedy Exit)
+                # BANK & RUNNER LOGIC (Greedy but Safe)
                 tp_dist = abs(entry_price - tp)
                 if tp_dist > 0 and profit >= (0.4 * tp_dist):
-                    if self.close_trade(ticket):
-                         print(f"💰 FLASH SCALP: Target Hit (40% TP). Closing Full Position {ticket}.")
-                         return
+                    if self.close_partial(ticket, 0.5):
+                         print(f"💰 BANK & RUNNER: Target Hit (40% TP). Closed 50% of {ticket}.")
+                         # IMMEDIATE BREAK EVEN
+                         new_sl = entry_price - (atr * 0.1)
+                         modification_reason = "Bank & Runner (BE Secured)"
+
+                # Trigger 1: Break Even
+                if profit > (1.0 * risk) and current_sl > entry_price:
+                     if new_sl is None:
+                        new_sl = entry_price - (atr * 0.1)
+                        modification_reason = "Break-Even (+1R)"
 
                 # Trigger 1: Break Even
                 if profit > (1.0 * risk) and current_sl > entry_price:

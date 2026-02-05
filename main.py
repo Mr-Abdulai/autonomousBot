@@ -367,7 +367,9 @@ Current Leader: {darwin.leader.name}
                 # 2. Generate Futures (100 Paths, 10 Period Horizon)
                 # Use current ATR for volatility estimation
                 atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
-                current_vol = atr_val / current_price if current_price > 0 else 0.001
+                # SAFEGUARD: Prevent Division by Zero
+                safe_price = current_price if current_price > 0 else 1.0
+                current_vol = atr_val / safe_price
                 
                 features = {'price': current_price, 'atr': atr_val, 'volatility': current_vol}
                 
@@ -557,14 +559,15 @@ Current Leader: {darwin.leader.name}
                     chronos_winrate = decision['chronos_result'].get('win_rate', 0.5)
                     chronos_survival = decision['chronos_result'].get('survival_rate', 0.7)
                     
-                    # Scale position: 40% WR = 0.7x, 50% = 1.0x, 70% = 1.3x, 80% = 1.5x
+                    # Scale position: 40% WR = 0.7x, 50% = 1.0x, 70% = 1.3x
+                    # STRICT 1% RULE: We can DOWNSIZE risk, but NEVER UPSIZE beyond 1.0x
                     chronos_multiplier = 0.5 + (chronos_winrate * 1.0)
                     
-                    # Cap at reasonable bounds
-                    chronos_multiplier = max(0.5, min(1.5, chronos_multiplier))
+                    # Cap at 1.0 max (Strict Risk Compliance)
+                    chronos_multiplier = max(0.5, min(1.0, chronos_multiplier))
                     
                     units *= chronos_multiplier
-                    print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%})")
+                    print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%}) - Capped at 1.0x")
                 else:
                     print("🔮 Chronos: No simulation data, using base position size")
 

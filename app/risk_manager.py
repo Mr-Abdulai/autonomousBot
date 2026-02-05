@@ -58,7 +58,7 @@ class EquityCurveManager:
         # C. GROWTH MODE (Making New Highs)
         # If we are within 1% of HWM, consider it "ATH Zone"
         elif self.current_drawdown_pct < 1.0:
-            return 1.5 # Boost risk by 50% (Compound)
+            return 1.0 # Boost risk DISABLED for Strict 1% Limit
             
         # D. STANDARD MODE
         return 1.0
@@ -129,11 +129,11 @@ class IronCladRiskManager:
         if Config.ENABLE_DYNAMIC_RISK:
             scale_factor = self.equity_manager.get_risk_scale_factor()
             
-        # --- HOT HAND BOOST (MOMENTUM) ---
-        from datetime import datetime, timedelta
-        if self.last_win_time and (datetime.now() - self.last_win_time) < timedelta(hours=1):
-            scale_factor *= 1.5
-            print(f"🔥 HOT HAND ACTIVE: Boosting size by 1.5x!")
+        # --- HOT HAND BOOST (DISABLED FOR STRICT 1% RISK) ---
+        # from datetime import datetime, timedelta
+        # if self.last_win_time and (datetime.now() - self.last_win_time) < timedelta(hours=1):
+        #    scale_factor *= 1.5
+        #    print(f"🔥 HOT HAND DISARMED: Strict 1% Risk Enforced.")
 
         final_risk_pct = self.risk_per_trade * scale_factor
         risk_amount = account_equity * final_risk_pct
@@ -206,8 +206,8 @@ class IronCladRiskManager:
             # Apply Half-Kelly (more conservative, reduces variance)
             safe_kelly = kelly_fraction * 0.5
             
-            # Cap at 2% max for safety (vs 1% standard)
-            kelly_risk_pct = min(safe_kelly, 0.02)
+            # Cap at Config RISK (Strict 1% Limit)
+            kelly_risk_pct = min(safe_kelly, self.risk_per_trade)
             
             # Calculate position size using Kelly risk %
             risk_amount = equity * kelly_risk_pct
