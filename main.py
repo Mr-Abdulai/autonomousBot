@@ -3,6 +3,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 import MetaTrader5 as mt5
 import pandas as pd
+import warnings
+# Suppress noisy HMM warnings
+warnings.filterwarnings("ignore", message="Degenerate mixture covariance")
+warnings.filterwarnings("ignore", category=FutureWarning)
 from app.config import Config
 from app.market_sensor import MarketSensor
 from app.groq_strategist import GroqStrategist
@@ -572,7 +576,7 @@ Current Leader: {darwin.leader.name}
                 
                 # Log decision with execution info (if any)
                 # Ensure we log even if no trade was taken (HOLD/WAIT), but if taken, include details
-                logger.log_decision(decision, execution_info)
+                dashboard.log_decision(decision, execution_info)
             
             active_sleep = 5 if active_trades else 60
             time.sleep(active_sleep)
