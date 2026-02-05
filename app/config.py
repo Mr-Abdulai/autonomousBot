@@ -20,7 +20,7 @@ class Config:
     
     # Cost Optimization - GOLD SPREADS
     SMART_FILTER = os.getenv("SMART_FILTER", "true").lower() == "true"
-    MAX_OPEN_TRADES = 5 # Pyramiding Limit (Increased for Scalping)
+    MAX_OPEN_TRADES = 3 # Pyramiding Limit (Reduced to 3 as per User Request)
     AI_SCAN_INTERVAL = int(os.getenv("AI_SCAN_INTERVAL", "300")) # 5 Minutes (Seconds)
     OVERRIDE_TIME_GUARD = True # STRICTLY FOR DEBUGGING/TESTING. Ignore Market Hours.
     

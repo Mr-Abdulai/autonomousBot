@@ -347,6 +347,13 @@ Current Leader: {darwin.leader.name}
                     # Pass Confidence to Decision
                     decision['confidence_score'] = conf
 
+            # PHASE 77: MAX TRADES GUARD
+            # User reported over-trading. We must strictly enforce the limit BEFORE calling AI.
+            if len(active_trades) >= Config.MAX_OPEN_TRADES:
+                print(f"🛑 MAX TRADES LIMIT HIT ({len(active_trades)}/{Config.MAX_OPEN_TRADES}). Halting new signals.")
+                run_ai = False
+                decision['reasoning_summary'] = f"Max Trades Reached ({len(active_trades)}/{Config.MAX_OPEN_TRADES}). Waiting for exit."
+            
             # Gate 4: Project Chronos (The Oracle of Time)
             if run_ai:
                 print("DEBUG: Entering Gate 4 (Chronos Simulation)...", flush=True)

@@ -226,11 +226,11 @@ class ExecutionEngine:
                 profit = current_price - entry_price
                 
                 # FLASH SCALP LOGIC (Greedy Exit)
-                # If price covers 50% of distance to TP, CLOSE FULL POSITION.
+                # If price covers 40% of distance to TP, CLOSE FULL POSITION.
                 tp_dist = abs(tp - entry_price)
-                if tp_dist > 0 and profit >= (0.5 * tp_dist):
+                if tp_dist > 0 and profit >= (0.4 * tp_dist):
                     if self.close_trade(ticket):
-                        print(f"💰 FLASH SCALP: Target Hit (50% TP). Closing Full Position {ticket}.")
+                        print(f"💰 FLASH SCALP: Target Hit (40% TP). Closing Full Position {ticket}.")
                         return  # Stop processing this trade (it's closed)
 
                 # Trigger 1: Break Even (Profit > 1.0 * Risk)
@@ -251,9 +251,9 @@ class ExecutionEngine:
                 
                 # FLASH SCALP LOGIC (Greedy Exit)
                 tp_dist = abs(entry_price - tp)
-                if tp_dist > 0 and profit >= (0.5 * tp_dist):
+                if tp_dist > 0 and profit >= (0.4 * tp_dist):
                     if self.close_trade(ticket):
-                         print(f"💰 FLASH SCALP: Target Hit (50% TP). Closing Full Position {ticket}.")
+                         print(f"💰 FLASH SCALP: Target Hit (40% TP). Closing Full Position {ticket}.")
                          return
 
                 # Trigger 1: Break Even
