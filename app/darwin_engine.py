@@ -184,27 +184,25 @@ class TrendHawk(ShadowStrategy):
              is_bullish_trend = current_price > ema_50
              is_bearish_trend = current_price < ema_50
         
-        if is_bullish_trend:
+        # BUY LOGIC
+        if (self.direction in ['LONG', 'BOTH']) and is_bullish_trend:
             # Bullish Breakout
             if current_price >= high_x:
                 p_sl = low_x 
                 risk = current_price - p_sl
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
                 return {'action': 'BUY', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price + 2*risk}
-            else:
-                 return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"Price {current_price:.5f} < Breakout {high_x:.5f}"}
                 
-        elif is_bearish_trend:
+        # SELL LOGIC
+        if (self.direction in ['SHORT', 'BOTH']) and is_bearish_trend:
             # Bearish Breakout
             if current_price <= low_x:
                 p_sl = high_x 
                 risk = p_sl - current_price
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
                 return {'action': 'SELL', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price - 2*risk}
-            else:
-                 return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"Price {current_price:.5f} > Breakout {low_x:.5f}"}
-                
-        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Against Trend (EMA50)"}
+
+        return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "No Breakout"}
 
 class MeanReverter(ShadowStrategy):
     """
@@ -292,6 +290,9 @@ class Sniper(ShadowStrategy):
          elif action == 'SELL':
              if is_h1_bearish:
                  return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
+        
+         if action == "HOLD":
+             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "No M5 Setup"}
                  
          return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (M5={action}, HTF1_EMA13={h1_ema13:.2f}/EMA50={h1_ema50:.2f})"}
 
