@@ -98,7 +98,9 @@ def main():
                        
                        if daily_deals and len(daily_deals) > 0:
                            # Net Profit = Profit + Swap + Commission + Fee
-                           account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_deals])
+                           # FILTER OUT DEPOSITS (Type 2 = Balance)
+                           daily_trading = [d for d in daily_deals if d.type != mt5.DEAL_TYPE_BALANCE]
+                           account_info['daily_pnl'] = sum([d.profit + d.swap + d.commission + d.fee for d in daily_trading])
                        
                        # Total (All Time - Safer Start Date)
                        # 1970 can cause overflow in some broker bridges. Using 2010.
