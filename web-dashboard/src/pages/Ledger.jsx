@@ -10,8 +10,9 @@ const Ledger = () => {
         const fetchLogs = async () => {
             try {
                 const res = await axios.get(`${API_BASE_URL}/logs?limit=100`);
-                // Filter only interesting events (Entries/Exits) if desired, or show all
-                setLogs(res.data);
+                // Filter only executed trades (BUY/SELL)
+                const executedTrades = res.data.filter(log => ['BUY', 'SELL'].includes(log.Action));
+                setLogs(executedTrades);
             } catch (err) {
                 console.error(err);
             }

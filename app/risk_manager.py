@@ -75,7 +75,6 @@ class IronCladRiskManager:
         self.risk_per_trade = Config.RISK_PER_TRADE
         # UPDATED: Lowered from 0.70 to match jury's partial agreement (1/3 votes = 0.5 confidence)
         self.min_confidence = 0.50
-        self.last_trade_time = 0
         self.equity_manager = EquityCurveManager() # Initialize
 
     def update_account_state(self, equity: float, is_new_day: bool = False):
@@ -91,18 +90,6 @@ class IronCladRiskManager:
         confidence = decision.get("confidence_score", 0.0)
         action = decision.get("action", "HOLD")
         
-        # 0. COOLDOWN (Anti-Chopping)
-        # Prevent rapid-fire entries (e.g. Buy then Sell in 2 mins)
-        import time
-        now = time.time()
-        if action != "HOLD" and (now - self.last_trade_time < 300): # 5 Minutes
-            # UNLESS it's a News Signal (Priority)
-            if "NEWS" not in decision.get('reasoning_summary', ''):
-                print(f"RiskManager: Cooldown Active ({int(300 - (now - self.last_trade_time))}s rem). Holding.")
-                decision['action'] = "HOLD"
-                decision['reasoning_summary'] = "Cooldown Active (Anti-Chop)"
-                return decision
-        
         # 1. CIRCUIT BREAKER
         if self.equity_manager.check_circuit_breaker():
             print("🚨 CIRCUIT BREAKER HIT: Max Daily Loss Exceeded. BLOCKING TRADES.")
@@ -115,10 +102,6 @@ class IronCladRiskManager:
             print(f"RiskManager: Confidence {confidence:.2f} < {self.min_confidence}. Overriding to HOLD.")
             decision['action'] = "HOLD"
             decision['reasoning_summary'] = f"[RISK OVERRIDE] Low confidence ({confidence:.2f}). Original: {decision.get('reasoning_summary')}"
-            
-        # If passed all checks, update last trade time
-        if decision['action'] != "HOLD":
-            self.last_trade_time = now
             
         return decision
 
@@ -218,14 +201,16 @@ class IronCladRiskManager:
             risk_per_unit = abs(current_price - sl_price)
             
             if risk_per_unit == 0:
-                return 1.0 # Minimal unit
+                return 0.01
             
             units = risk_amount / risk_per_unit
+            lots = units / 100000  # Convert to MT5 lots
+            lots = max(0.01, round(lots, 2))  # Min 0.01, round to 2 decimals
             
             print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, Half-Kelly={safe_kelly:.3f}")
-            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {units:.2f} units (vs {self.risk_per_trade:.2%} standard)")
+            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {lots:.2f} lots (vs {self.risk_per_trade:.2%} standard)")
             
-            return units
+            return lots
             
         except Exception as e:
             print(f"Kelly Calculation Error: {e}, falling back to standard sizing")
