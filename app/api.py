@@ -37,8 +37,12 @@ def get_system_state():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/logs")
-def get_trade_logs(limit: int = 50):
-    """Returns the last N logs as a list of dicts."""
+def get_trade_logs(limit: int = 50, show_all: bool = False):
+    """
+    Returns the last N logs as a list of dicts.
+    If show_all is False, filters for executed trades (BUY/SELL) *before* limiting,
+    ensuring older trades are visible.
+    """
     if not os.path.exists(LOG_FILE):
         return []
     
@@ -49,6 +53,11 @@ def get_trade_logs(limit: int = 50):
             
         # Ensure timestamp sorting
         if "Timestamp" in df.columns:
+            # Server-Side Filtering (Crucial for seeing older executed trades)
+            if not show_all and "Action" in df.columns:
+                # Filter only for executed trades
+                df = df[df["Action"].isin(["BUY", "SELL"])]
+            
             # Sort desc
             # Convert to dict
             records = df.tail(limit).iloc[::-1].to_dict(orient="records")
