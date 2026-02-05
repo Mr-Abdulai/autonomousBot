@@ -49,7 +49,7 @@ const Ledger = () => {
                     <tbody className="divide-y divide-fintech-border/50 text-sm">
                         {logs.map((row, i) => (
                             <tr key={i} className="hover:bg-white/5 transition-colors">
-                                <td className="p-4 text-slate-500 font-mono">{row.Timestamp.split(' ')[1]}</td>
+                                <td className="p-4 text-slate-500 font-mono text-xs">{row.Timestamp.split(' ')[0]}</td>
                                 <td className="p-4 text-white font-bold">{row.Symbol}</td>
                                 <td className="p-4">
                                     <span className={`flex items-center gap-1 font-bold ${row.Action === 'BUY' ? 'text-green-400' :

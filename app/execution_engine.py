@@ -72,7 +72,7 @@ class ExecutionEngine:
             self.save_state(current_trades)
             
             print(f"[BACKTEST] Trade Mock-Executed. Ticket: {mock_ticket}")
-            return mock_ticket
+            return trade_data
 
         # LIVE MODE
         if not mt5.initialize():
@@ -107,7 +107,7 @@ class ExecutionEngine:
         print(f"Order Sent! Ticket: {result.order}")
         
         trade_data = {
-            "ticket": result.order,
+            "ticket": str(result.order),
             "symbol": self.symbol,
             "mode": "LIVE",
             "action": action,
@@ -121,7 +121,7 @@ class ExecutionEngine:
         current_trades = self.load_state()
         current_trades.append(trade_data)
         self.save_state(current_trades)
-        return str(result.order)
+        return trade_data
 
     def modify_order_sl(self, ticket: int, new_sl: float) -> bool:
         """Helper to modify SL."""
@@ -225,18 +225,14 @@ class ExecutionEngine:
             if action == "BUY":
                 profit = current_price - entry_price
                 
-                # BUG FIX #10: Partial Profit Taking (0.5R to 1R range)
-                # Check persisted state instead of in-memory tracker
-                if profit > (0.5 * risk) and profit < (1.0 * risk):
-                    partial_closed = trade.get('partial_closed', False)
-                    if not partial_closed:
-                        # Close 50% of position
-                        if self.close_partial(ticket, 0.5):
-                            # Update trade state in file
-                            trade['partial_closed'] = True
-                            self.save_state(trades)  # Persist immediately
-                            print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
-                
+                # FLASH SCALP LOGIC (Greedy Exit)
+                # If price covers 50% of distance to TP, CLOSE FULL POSITION.
+                tp_dist = abs(tp - entry_price)
+                if tp_dist > 0 and profit >= (0.5 * tp_dist):
+                    if self.close_trade(ticket):
+                        print(f"💰 FLASH SCALP: Target Hit (50% TP). Closing Full Position {ticket}.")
+                        return  # Stop processing this trade (it's closed)
+
                 # Trigger 1: Break Even (Profit > 1.0 * Risk)
                 if profit > (1.0 * risk) and current_sl < entry_price:
                     new_sl = entry_price + (atr * 0.1) 
@@ -253,16 +249,13 @@ class ExecutionEngine:
             elif action == "SELL":
                 profit = entry_price - current_price
                 
-                # BUG FIX #10: Partial Profit Taking (0.5R to 1R range)
-                # Check persisted state
-                if profit > (0.5 * risk) and profit < (1.0 * risk):
-                    partial_closed = trade.get('partial_closed', False)
-                    if not partial_closed:
-                        if self.close_partial(ticket, 0.5):
-                            trade['partial_closed'] = True
-                            self.save_state(trades)  # Persist immediately
-                            print(f"💰 PARTIAL PROFIT: Closed 50% of {ticket} at +{profit/risk:.2f}R")
-                
+                # FLASH SCALP LOGIC (Greedy Exit)
+                tp_dist = abs(entry_price - tp)
+                if tp_dist > 0 and profit >= (0.5 * tp_dist):
+                    if self.close_trade(ticket):
+                         print(f"💰 FLASH SCALP: Target Hit (50% TP). Closing Full Position {ticket}.")
+                         return
+
                 # Trigger 1: Break Even
                 if profit > (1.0 * risk) and current_sl > entry_price:
                     new_sl = entry_price - (atr * 0.1)

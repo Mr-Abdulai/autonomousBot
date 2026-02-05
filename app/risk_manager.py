@@ -73,15 +73,22 @@ class EquityCurveManager:
 class IronCladRiskManager:
     def __init__(self):
         self.risk_per_trade = Config.RISK_PER_TRADE
-        # UPDATED: Lowered from 0.70 to match jury's partial agreement (1/3 votes = 0.5 confidence)
-        self.min_confidence = 0.50
+        # UPDATED: Raised to 0.70 as requested (High Selectivity)
+        self.min_confidence = 0.70
         self.equity_manager = EquityCurveManager() # Initialize
+        self.last_win_time = None
 
     def update_account_state(self, equity: float, is_new_day: bool = False):
         self.equity_manager.update(equity, is_new_day)
         
     def sync_start_balance(self, equity: float):
          self.equity_manager.sync_balance(equity)
+
+    def register_win(self):
+        """Call this when a trade closes in profit."""
+        from datetime import datetime
+        self.last_win_time = datetime.now()
+        print("🔥 HOT HAND: Win registered. Next trade size boosted 1.5x!")
 
     def validate_signal(self, decision: dict) -> dict:
         """
@@ -122,6 +129,12 @@ class IronCladRiskManager:
         if Config.ENABLE_DYNAMIC_RISK:
             scale_factor = self.equity_manager.get_risk_scale_factor()
             
+        # --- HOT HAND BOOST (MOMENTUM) ---
+        from datetime import datetime, timedelta
+        if self.last_win_time and (datetime.now() - self.last_win_time) < timedelta(hours=1):
+            scale_factor *= 1.5
+            print(f"🔥 HOT HAND ACTIVE: Boosting size by 1.5x!")
+
         final_risk_pct = self.risk_per_trade * scale_factor
         risk_amount = account_equity * final_risk_pct
         

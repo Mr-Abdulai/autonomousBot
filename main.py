@@ -258,6 +258,12 @@ Current Leader: {darwin.leader.name}
             monitor_result = executor.monitor_open_trades(current_price, atr=atr_val, fractal_levels=fractal_levels)
             active_trades = monitor_result['trades'] 
             
+            # PHASE 68: MOMENTUM BOOST
+            # If we just closed a trade in profit, trigger the Hot Hand mechanic
+            if monitor_result.get('closed_pnl', 0.0) > 0:
+                print(f"💰 PROFIT LOCKED (${monitor_result['closed_pnl']:.2f}). Triggering Momentum Boost.")
+                risk_manager.register_win()
+            
             # C. Determine System State & Decision
             run_ai = True
             decision = {"action": "WAIT", "confidence_score": 0.0, "reasoning_summary": "Scanning..."}
@@ -553,8 +559,13 @@ Current Leader: {darwin.leader.name}
 
                 # BUG FIX #9: Removed scout safety halving (scout mode removed)
 
+                execution_info = None
                 if units > 0:
-                        executor.execute_trade(decision['action'], sl_price, tp_price, units)
+                        execution_info = executor.execute_trade(decision['action'], sl_price, tp_price, units)
+                
+                # Log decision with execution info (if any)
+                # Ensure we log even if no trade was taken (HOLD/WAIT), but if taken, include details
+                logger.log_decision(decision, execution_info)
             
             active_sleep = 5 if active_trades else 60
             time.sleep(active_sleep)
