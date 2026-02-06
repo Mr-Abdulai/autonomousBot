@@ -39,15 +39,30 @@ def get_system_state():
 @app.get("/logs")
 def get_trade_logs(limit: int = 50, show_all: bool = False):
     """
-    Returns the last N logs as a list of dicts.
+    Returns the last N logs for the ACTIVE account (from system state).
     If show_all is False, filters for executed trades (BUY/SELL) *before* limiting,
     ensuring older trades are visible.
     """
-    if not os.path.exists(LOG_FILE):
+    # 1. Determine active log file
+    active_log_file = LOG_FILE # Default
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                account_id = state.get('login')
+                if account_id:
+                     # Check if specific account log exists
+                     spec_file = os.path.join(Config.BASE_DIR, f"trade_log_{account_id}.csv")
+                     if os.path.exists(spec_file):
+                         active_log_file = spec_file
+        except:
+             pass
+
+    if not os.path.exists(active_log_file):
         return []
     
     try:
-        df = pd.read_csv(LOG_FILE, on_bad_lines='skip')
+        df = pd.read_csv(active_log_file, on_bad_lines='skip')
         if df.empty:
             return []
             

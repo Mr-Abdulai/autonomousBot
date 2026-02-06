@@ -88,6 +88,7 @@ def main():
                    account_info['server'] = acc.server
                    account_info['currency'] = acc.currency
                    account_info['leverage'] = acc.leverage
+                   account_info['login'] = acc.login # Unique Account ID for Log Separation
                    
                    # --- CALCULATE PnL from History ---
                    try:

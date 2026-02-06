@@ -8,7 +8,8 @@ from app.config import Config
 class DashboardLogger:
     def __init__(self):
         self.state_file = os.path.join(Config.BASE_DIR, "system_state.json")
-        self.log_file = os.path.join(Config.BASE_DIR, "trade_log.csv")
+        self.log_file = os.path.join(Config.BASE_DIR, "trade_log.csv") # Default (Fallback)
+        self.current_account_id = None
         self._initialize_csv()
 
     def _initialize_csv(self):
@@ -28,6 +29,16 @@ class DashboardLogger:
         oracle_brief: Optional string from the Oracle
         chronos_stats: Optional dict containing Simulation results
         """
+
+        # Dynamic Log File Switching
+        account_id = account_info.get('login', None)
+        if account_id and account_id != self.current_account_id:
+            # Switch to Account-Specific Log
+            self.current_account_id = account_id
+            self.log_file = os.path.join(Config.BASE_DIR, f"trade_log_{account_id}.csv")
+            self._initialize_csv() # Ensure header exists for new file
+            print(f"📊 Dashboard Logger switched to: trade_log_{account_id}.csv")
+
         state = {
             "last_heartbeat": datetime.now().isoformat(),
             "status": "ONLINE",
@@ -41,6 +52,8 @@ class DashboardLogger:
             "leverage": account_info.get("leverage", 1),
             "margin": account_info.get("margin", 0.0),
             "margin_free": account_info.get("margin_free", 0.0),
+            "margin_free": account_info.get("margin_free", 0.0),
+            "login": account_info.get("login", None), # Added Login ID to state for API
             "name": account_info.get("name", "Unknown"),
             "server": account_info.get("server", "Unknown"),
             "currency": account_info.get("currency", "USD"),
