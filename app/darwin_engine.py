@@ -971,19 +971,66 @@ class DarwinEngine:
             s += f" {i+1}. {strat.name}: Score {score:.0f} (Eq: ${strat.phantom_equity:.0f})\n"
         return s
 
-    def get_swarm_state(self) -> list:
-        """Returns full state of all strategies for Dashboard."""
-        data = []
+    def get_swarm_state(self) -> dict:
+        """Returns full state of all strategies for Dashboard (Aggregated)."""
+        
+        # 1. Aggregate by Family
+        families = {}
         for s in self.strategies:
-            data.append({
+            # Extract Family Name (e.g. TrendHawk_LONG_20p -> TrendHawk)
+            family_name = s.name.split('_')[0]
+            
+            if family_name not in families:
+                families[family_name] = {
+                    'count': 0,
+                    'total_score': 0,
+                    'best_score': -9999,
+                    'best_agent': None,
+                    'total_equity': 0,
+                    'strategies': []
+                }
+            
+            f = families[family_name]
+            f['count'] += 1
+            
+            score = self.last_scores.get(s.name, 0)
+            f['total_score'] += score
+            f['total_equity'] += s.phantom_equity
+            
+            if score > f['best_score']:
+                f['best_score'] = score
+                f['best_agent'] = s.name
+                
+        # 2. Calculate Averages
+        final_families = {}
+        for fname, stats in families.items():
+            avg_score = stats['total_score'] / stats['count'] if stats['count'] > 0 else 0
+            final_families[fname] = {
+                'count': stats['count'],
+                'avg_score': avg_score,
+                'best_agent': stats['best_agent'],
+                'best_score': stats['best_score'],
+                'equity': stats['total_equity']
+            }
+
+        # 3. Top Performers (Elite Leaderboard)
+        # Sort by score
+        sorted_strats = sorted(self.strategies, key=lambda s: self.last_scores.get(s.name, 0), reverse=True)
+        top_performers = []
+        for s in sorted_strats[:10]:
+            top_performers.append({
                 "name": s.name,
                 "equity": s.phantom_equity,
                 "score": self.last_scores.get(s.name, 0),
                 "wins": s.win_streak,
                 "losses": s.loss_streak,
-                "drawdown": s.max_drawdown,
+                "dd": s.max_drawdown, # 'drawdown' in legacy, 'dd' in new UI? let's stick to 'dd' to match UI code
                 "peak": s.peak_equity,
                 "direction": s.direction
             })
-        # Sort by Score implicitly via the engine's sort order (which happens in update)
-        return data
+
+        return {
+            "families": final_families,
+            "top_performers": top_performers,
+            "population_size": len(self.strategies)
+        }
