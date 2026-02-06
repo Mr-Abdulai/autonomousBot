@@ -314,6 +314,9 @@ class Sniper(ShadowStrategy):
                  
          return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (M5={action}, HTF1_EMA13={h1_ema13:.2f}/EMA50={h1_ema50:.2f})"}
 
+    def clone(self, new_params: dict = None) -> 'Sniper':
+        return Sniper(self.name, self.direction)
+
 class RSI_Matrix(ShadowStrategy):
     """
     RSI Mean Reversion Strategy (The Scalper).
@@ -387,6 +390,10 @@ class MACD_Cross(ShadowStrategy):
                 
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
 
+    def clone(self, new_params: dict = None) -> 'MACD_Cross':
+        speed = new_params.get('speed', self.speed) if new_params else self.speed
+        return MACD_Cross(direction=self.direction, speed=speed)
+
 class TrendPullback(ShadowStrategy):
     """
     4. The 'Tactician': Buying Pullbacks in a defined Trend.
@@ -429,6 +436,9 @@ class TrendPullback(ShadowStrategy):
                      return {'action': 'SELL', 'confidence': 0.85, 'sl': sl, 'tp': tp, 'reason': "EMA50 Pullback (Trend Down)"}
 
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+
+    def clone(self, new_params: dict = None) -> 'TrendPullback':
+        return TrendPullback(self.name, self.direction)
 
 class DarwinEngine:
     def __init__(self):
