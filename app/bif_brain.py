@@ -283,25 +283,30 @@ class BIFBrain:
             # CLEANING: Handle Inf/NaN created by Log of 0 or Volatility
             X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             
+            # Check for finite values
+            if not np.all(np.isfinite(X)):
+                 return -1, []
+            
             # Scale
             X_scaled = self.scaler.fit_transform(X)
             
             # CHECK: If all data is flattened to 0 (e.g. frozen market), HMM will crash
-            if np.all(X_scaled == 0):
+            if np.all(X_scaled == 0) or np.any(np.isnan(X_scaled)):
                 return 0, [] # Return Range/Neutral state
 
             # Train (Fit on history)
             # Instantiating locally to avoid state accumulation warnings from hmmlearn
             # FIX: Use 'diag' covariance for stability on financial data. 
             # FIX: Regularize 'min_covar' to prevent singularity in flat markets.
+            # FIX: Reduced n_mix to 1 (GaussianHMM equivalent) for stability on thin data
             model = GMMHMM(
                 n_components=3, 
-                n_mix=2, 
+                n_mix=1, 
                 covariance_type="diag", 
                 n_iter=500, 
                 random_state=42, 
                 init_params='stmcw',
-                min_covar=0.001
+                min_covar=0.01 # Increased from 0.001 for extra stability
             )
             
             model.fit(X_scaled)
