@@ -598,6 +598,19 @@ Current Leader: {darwin.leader.name}
                 # Ensure we log even if no trade was taken (HOLD/WAIT), but if taken, include details
                 dashboard.log_decision(decision, execution_info)
             
+            # PHASE 9: DAWN OF A NEW DAY (EVOLUTION TRIGGER)
+            # Check for midnight (local time or server time) to run evolution
+            # Let's say between 00:00 and 01:00 we evolve once.
+            now_hour = datetime.now().hour
+            if now_hour == 0:
+                if 'evolved_today' not in locals() or not locals()['evolved_today']:
+                    print("🌌 MIDNIGHT EVENT: Initiating Darwinian Evolution Phase...")
+                    darwin.evolve_population()
+                    locals()['evolved_today'] = True
+            elif now_hour > 1:
+                 # Reset flag after 1 AM
+                 locals()['evolved_today'] = False
+
             active_sleep = 5 if active_trades else 60
             time.sleep(active_sleep)
 

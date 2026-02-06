@@ -42,6 +42,11 @@ class ShadowStrategy(ABC):
             return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
             
         return signal
+
+    @abstractmethod
+    def clone(self, new_params: dict = None) -> 'ShadowStrategy':
+        """Creates a new instance of this strategy with potentially mutated parameters."""
+        pass
         
     def update_performance(self, current_price: float):
         """Updates Phantom Equity based on active virtual trades and tracks Drawdown."""
@@ -204,6 +209,13 @@ class TrendHawk(ShadowStrategy):
 
         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "No Breakout"}
 
+    def clone(self, new_params: dict = None) -> 'TrendHawk':
+        params = new_params if new_params else self.params.copy()
+        p = params.get('period', 20)
+        # Construct new name based on params
+        new_name = f"TrendHawk_{self.direction}_{p}p"
+        return TrendHawk(new_name, self.direction, params)
+
 class MeanReverter(ShadowStrategy):
     """
     2. The 'Contrarian': Fading Bollinger Band Extremes.
@@ -243,6 +255,12 @@ class MeanReverter(ShadowStrategy):
             return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis}
             
         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Inside Bands"}
+
+    def clone(self, new_params: dict = None) -> 'MeanReverter':
+        params = new_params if new_params else self.params.copy()
+        d = params.get('std_dev', 2.0)
+        new_name = f"MeanRev_{self.direction}_{d:.1f}SD"
+        return MeanReverter(new_name, self.direction, params)
 
 class Sniper(ShadowStrategy):
     """
@@ -561,7 +579,154 @@ class DarwinEngine:
         # 4. Save Memory
         self.save_state()
         
+        
     def get_alpha_signal(self, df, indicators, mtf_data) -> dict:
+        """
+        Retrieves signal from the active leader.
+        Supports 'Allowed Strategies' filter from BIF Brain (Scout Protocol).
+        """
+        # 1. Get Restrictions
+        bif_analysis = mtf_data.get('analysis', {})
+        allowed = bif_analysis.get('allowed_strategies', ['ALL'])
+        
+        # 2. Select Strategy
+        selected_strat = self.leader # Default to Global Leader
+        
+        if 'ALL' not in allowed:
+            # We are in restricted mode (e.g. Scout Protocol)
+            # Find the highest scoring strategy that matches the allow list
+            found = False
+            for strat in self.strategies:
+                # Check match (e.g. "MeanReverter_LONG" in allowed matches "MeanRev_LONG_2.0SD")
+                # Need to be careful with naming conventions.
+                # Convention:
+                # BIF Output: "MeanReverter_LONG", "RSI_Matrix_LONG"
+                # Strat Names: "MeanRev_LONG_...", "RSI_Matrix_LONG_..."
+                
+                # Normalize for matching
+                is_match = False
+                for allow_tag in allowed:
+                    # Map BIF tag to Strat Name substring
+                    tag_map = {
+                        "MeanReverter_LONG": "MeanRev_LONG",
+                        "MeanReverter_SHORT": "MeanRev_SHORT",
+                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
+                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
+                        "TrendHawk_LONG": "TrendHawk_LONG",
+                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                    }
+                    search_term = tag_map.get(allow_tag, allow_tag)
+                    if search_term in strat.name:
+                        is_match = True
+                        break
+                
+                if is_match:
+                    selected_strat = strat
+                    found = True
+                    break
+            
+            if not found:
+                return {'action': 'HOLD', 'reason': 'No strategies fit Regime Restrictions'}
+
+        # 3. Generate Signal
+        signal = selected_strat.generate_signal(df, indicators, mtf_data)
+        signal['source'] = f"Darwin::{selected_strat.name}"
+        signal['darwin_score'] = self.last_scores.get(selected_strat.name, 0)
+        
+        # 4. Inject Scout Metadata if restricted
+        if 'ALL' not in allowed:
+            signal['scout_mode'] = True
+            
+        return signal
+
+    def evolve_population(self):
+        """
+        GENETIC ALGORITHM: DAILY EVOLUTION EVENT
+        1. Select Elites (Top 20%) - They survive.
+        2. Cull Weakest (Bottom 20%) - They die.
+        3. Breed/Mutate Middle Class - They evolve.
+        """
+        # Hard Cap to prevent explosion
+        MAX_POPULATION = 100
+        
+        # 0. Check Timing (Only evolve once every 24h or if forced?)
+        # For now, let's call this manually or on startup if state is old?
+        # Let's just implement the mechanics.
+        
+        # Sort by Score
+        self.strategies.sort(key=lambda s: s.get_quality_score(), reverse=True)
+        count = len(self.strategies)
+        
+        # 1. ELITISM
+        n_elites = max(5, int(count * 0.2))
+        elites = self.strategies[:n_elites]
+        print(f"🧬 EVOLUTION: {n_elites} Elites moved to next generation.")
+        
+        # 2. CULLING
+        n_cull = max(5, int(count * 0.2))
+        survivors = self.strategies[:-n_cull] # Keep top 80% initially, but we will replace bottom
+        
+        # Actually, let's keep the Top 50% as Parents
+        parent_pool = self.strategies[:int(count * 0.5)]
+        
+        next_gen = []
+        next_gen.extend(elites) # Elites live forever (until dethroned)
+        
+        # Fill the rest of the slots
+        slots_open = MAX_POPULATION - len(next_gen)
+        
+        import random
+        
+        while len(next_gen) < MAX_POPULATION:
+            # Pick a parent
+            parent = random.choice(parent_pool)
+            
+            # MUTATION (Create a variant)
+            child = self.mutate(parent)
+            
+            # Verify Uniqueness (Simple Name Check)
+            if not any(s.name == child.name for s in next_gen):
+                next_gen.append(child)
+            
+            if len(next_gen) >= MAX_POPULATION:
+                break
+                
+        self.strategies = next_gen
+        print(f"🧬 EVOLUTION COMPLETE. Population: {len(self.strategies)}")
+
+    def mutate(self, parent: ShadowStrategy) -> ShadowStrategy:
+        """Applies random drift to strategy parameters."""
+        import random
+        
+        # Determine Type and Mutate
+        new_params = parent.params.copy()
+        
+        if isinstance(parent, TrendHawk):
+            current_p = new_params.get('period', 20)
+            # Drift +/- 10%
+            drift = int(current_p * random.uniform(-0.2, 0.2)) 
+            if drift == 0: drift = random.choice([-1, 1])
+            new_p = max(5, current_p + drift)
+            new_params['period'] = new_p
+            return parent.clone(new_params)
+            
+        elif isinstance(parent, MeanReverter):
+            current_std = new_params.get('std_dev', 2.0)
+            drift = random.uniform(-0.2, 0.2)
+            new_std = round(max(1.0, min(4.0, current_std + drift)), 1)
+            new_params['std_dev'] = new_std
+            return parent.clone(new_params)
+            
+        elif isinstance(parent, RSI_Matrix):
+            # Special case for RSI (Attributes, not params dict)
+            drift = random.randint(-5, 5)
+            new_lower = max(10, min(45, parent.lower + drift))
+            new_upper = max(55, min(90, parent.upper + drift))
+            return parent.clone({'lower': new_lower, 'upper': new_upper})
+            
+        # Default (No mutation implemented for this type, clone exact)
+        return parent.clone()
+
         """
         Retrieves signal from the active leader.
         Supports 'Allowed Strategies' filter from BIF Brain (Scout Protocol).
