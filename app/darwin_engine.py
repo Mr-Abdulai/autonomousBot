@@ -351,6 +351,13 @@ class RSI_Matrix(ShadowStrategy):
                 
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
 
+    def clone(self, new_params: dict = None) -> 'RSI_Matrix':
+        # RSI doesn't use self.params dict conventionally in init, it uses instance vars.
+        # We should map them.
+        lower = new_params.get('lower', self.lower) if new_params else self.lower
+        upper = new_params.get('upper', self.upper) if new_params else self.upper
+        return RSI_Matrix(lower=lower, upper=upper, direction=self.direction)
+
 class MACD_Cross(ShadowStrategy):
     """
     MACD Momentum Strategy (The Flow).
