@@ -67,16 +67,22 @@ class BIFBrain:
         
         regime = "UNKNOWN"
         regime_id = -1
+        regime_probs = []
         
         if ML_AVAILABLE and len(df) > 200:
             regime_id, regime_probs = self._decode_hmm_regime(df)
             # Map ID to Concept (This requires semantic mapping, usually heuristic based on variance)
             # For now, we return the ID.
+
+        # Calculate Confidence (Certainty of State)
+        # If probs is empty (no ML), confidence is 0.0
+        confidence = np.max(regime_probs) if len(regime_probs) > 0 else 0.0
         
         return {
             "hurst": round(hurst_val, 3),
             "entropy": round(entropy_val, 3),
             "regime_id": regime_id,
+            "regime_confidence": float(confidence), # Expose Markov Certainty
             "ml_active": ML_AVAILABLE
         }
 

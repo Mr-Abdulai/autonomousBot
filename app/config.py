@@ -8,7 +8,7 @@ load_dotenv()
 class Config:
     # Trading Settings - OPTIMIZED FOR XAUUSD (GOLD)
     SYMBOL = os.getenv("SYMBOL", "XAUUSD")  # Gold trading
-    TIMEFRAME = mt5.TIMEFRAME_M5   # SCALPING MODE: 5 Minute candles (3x more signals)
+    TIMEFRAME = mt5.TIMEFRAME_M15  # PRECISION MODE: 15 Minute candles (Higher Probability)
     RISK_PER_TRADE = 0.01          # 1% risk per trade
     
     # GOLD-SPECIFIC: Wider stops for volatility

@@ -495,7 +495,7 @@ Current Leader: {darwin.leader.name}
                 # Get BIF metrics from MTF data
                 mtf_analysis = mtf_data.get('analysis', {})
                 mtf_stats = mtf_analysis.get('mtf_stats', {})
-                # FIX: Use BASE (M5) instead of hardcoded M15
+                # FIX: Use BASE (M15) instead of hardcoded M5
                 base_stats = mtf_stats.get('BASE', {})
                 hurst = base_stats.get('hurst', 0.5)
                 entropy = base_stats.get('entropy', 0.7)
@@ -572,6 +572,21 @@ Current Leader: {darwin.leader.name}
                     print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%}) - Capped at 1.0x")
                 else:
                     print("🔮 Chronos: No simulation data, using base position size")
+
+                # PHASE 77: MARKOV CONVICTION BETTING
+                # If the Brain is confused (Low Probability), we scale down.
+                # If the Brain is Certain (High Probability), we go full size.
+                if 'bif_stats' in locals() and 'regime_confidence' in bif_stats:
+                    markov_conf = bif_stats.get('regime_confidence', 0.0)
+                    if markov_conf > 0:
+                        # Logic: 50% Confidence = 0.75x Size. 90% = 0.95x Size.
+                        # Formula: 0.5 + (0.5 * Confidence)
+                        markov_mult = 0.5 + (0.5 * markov_conf)
+                        # Cap at 1.0 (Strict 1% Risk Compliance)
+                        markov_mult = min(1.0, markov_mult)
+                        
+                        units *= markov_mult
+                        print(f"🧠 Markov Conviction: {markov_conf:.1%} Certainty -> {markov_mult:.2f}x Sizing")
 
                 # BUG FIX #9: Removed scout safety halving (scout mode removed)
 
