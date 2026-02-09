@@ -75,7 +75,8 @@ class MarketSensor:
         high = df['high']
         low = df['low']
 
-        # 1. EMA 50 & 200
+        # 1. EMA 13, 50 & 200
+        df['EMA_13'] = close.ewm(span=13, adjust=False).mean()
         df['EMA_50'] = close.ewm(span=50, adjust=False).mean()
         df['EMA_200'] = close.ewm(span=200, adjust=False).mean()
 
@@ -114,6 +115,7 @@ class MarketSensor:
         Fetches n_candles from MT5, calculates indicators.
         Returns DataFrame with 'time', 'open', 'high', 'low', 'close', 'tick_volume',
         'RSI_14', 'EMA_50', 'EMA_200', 'ATR_14', 'BB_Upper', 'BB_Lower', 'MACD', 'MACD_Signal'.
+        'RSI_14', 'EMA_13', 'EMA_50', 'EMA_200', 'ATR_14', 'BB_Upper', 'BB_Lower', 'MACD', 'MACD_Signal'.
         """
         if not self.initialize():
             raise ConnectionError("Could not connect to MT5 or find symbol.")
@@ -161,6 +163,7 @@ class MarketSensor:
         Adds Technical Indicators to the DF using custom TA lib.
         """
         # 1. Trend
+        df['EMA_13'] = TALib.ema(df['close'], 13)
         df['EMA_50'] = TALib.ema(df['close'], 50)
         df['EMA_200'] = TALib.ema(df['close'], 200)
         
