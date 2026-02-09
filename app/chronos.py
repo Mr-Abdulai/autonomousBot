@@ -166,5 +166,5 @@ class ChronosArena:
             "loss_rate": loss_rate,
             "survival_rate": survival_rate,
             "n_sims": n_paths,
-            "recommendation": "EXECUTE" if win_rate > 0.55 else "BLOCK"
+            "recommendation": "EXECUTE" if win_rate > 0.45 else "BLOCK"
         }
