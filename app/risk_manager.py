@@ -8,40 +8,103 @@ class EquityCurveManager:
     Determines if we are in 'Survival Mode' or 'Growth Mode'.
     """
     def __init__(self, initial_equity: float = 10000.0):
-        self.high_water_mark = initial_equity
-        self.start_of_day_equity = initial_equity
+        self.state_file = "risk_state.json"
+        
+        # Load persisted state
+        state = self.load_state()
+        if state:
+            self.high_water_mark = state.get('high_water_mark', initial_equity)
+            self.start_of_day_equity = state.get('start_of_day_equity', initial_equity)
+            self.last_date = state.get('date', None)
+        else:
+            self.high_water_mark = initial_equity
+            self.start_of_day_equity = initial_equity
+            self.last_date = None
+            
         self.current_drawdown_pct = 0.0
         self.daily_drawdown_pct = 0.0
+
+    def load_state(self) -> dict:
+        import json
+        import os
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                     return json.load(f)
+            except:
+                return None
+        return None
+
+    def save_state(self):
+        import json
+        from datetime import datetime
+        data = {
+            'high_water_mark': self.high_water_mark,
+            'start_of_day_equity': self.start_of_day_equity,
+            'date': self.last_date if self.last_date else datetime.now().date().isoformat()
+        }
+        with open(self.state_file, 'w') as f:
+            json.dump(data, f, indent=4)
         
     def update(self, current_equity: float, is_new_day: bool = False):
         """Called every loop to update state."""
+        from datetime import datetime
+        today_str = datetime.now().date().isoformat()
+        
+        # Check against persisted date
+        if self.last_date != today_str:
+            is_new_day = True
+            self.last_date = today_str
+            
         if is_new_day:
             self.start_of_day_equity = current_equity
+            self.save_state() # Persist new day
             
         # 1. Update High Water Mark (HWM)
         if current_equity > self.high_water_mark:
             self.high_water_mark = current_equity
-            
-    def sync_balance(self, equity: float):
-        """Called on startup to sync internal state with Live Account."""
-        print(f"RiskManager: Syncing Start Equity to Live Balance: ${equity:.2f}")
-        self.start_of_day_equity = equity
-        # Force Reset HWM to current equity to avoid inheriting 'Deep Drawdown' state from default $10k
-        self.high_water_mark = equity
+            self.save_state() # Persist new HWM
             
         # 2. Calculate Drawdowns
         if self.high_water_mark > 0:
-            drawdown = (self.high_water_mark - equity)
+            drawdown = (self.high_water_mark - current_equity)
             self.current_drawdown_pct = (drawdown / self.high_water_mark) * 100.0
         else:
             self.current_drawdown_pct = 0.0
             
         # Daily Drawdown
         if self.start_of_day_equity > 0:
-            daily_loss = self.start_of_day_equity - equity
+            daily_loss = self.start_of_day_equity - current_equity
             self.daily_drawdown_pct = (daily_loss / self.start_of_day_equity) * 100.0
         else:
             self.daily_drawdown_pct = 0.0
+            
+    def sync_balance(self, equity: float):
+        """Called on startup to sync internal state with Live Account."""
+        print(f"RiskManager: Syncing Start Equity to Live Balance: ${equity:.2f}")
+        from datetime import datetime
+        today_str = datetime.now().date().isoformat()
+        
+        # Check Persistence
+        if self.last_date == today_str:
+            # SAME DAY RESTART: Keep start_of_day_equity from file!
+            # If we crashed after losing 5%, start_of_day is HIGH, equity is LOW.
+            # Daily Loss = HIGH - LOW = Correct Loss.
+            print(f"RiskManager: Same Day Restart. Daily Limit Preserved (Start Equity: ${self.start_of_day_equity:.2f})")
+        else:
+            # NEW DAY RESTART: Reset Start Equity
+            self.start_of_day_equity = equity
+            self.last_date = today_str
+            print(f"RiskManager: New Day Detected. Resetting Daily Limit.")
+            
+        # Ensure HWM is at least current equity (but respect higher HWM from history)
+        if equity > self.high_water_mark:
+            self.high_water_mark = equity
+            
+        self.save_state()
+        
+        # Recalculate immediately
+        self.update(equity)
 
     def get_risk_scale_factor(self, is_making_ath: bool = False) -> float:
         """

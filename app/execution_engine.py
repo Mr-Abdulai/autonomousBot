@@ -179,9 +179,9 @@ class ExecutionEngine:
             
             # --- MANAGEMENT LOGIC (If Active) ---
             if not is_closed and mode == "LIVE":
-                # Apply Smart Trailing
+                # Apply Smart Trailing (updates trade dict in place)
                 # Uses ATR for validation but purely Structural (Fractal) targets if available
-                self.apply_trailing_stop(ticket, current_price, open_price, action, sl, tp, atr, fractal_levels)
+                self.apply_trailing_stop(trade, current_price, atr, fractal_levels)
                 managed_count += 1 
 
             # --- FINALIZATION ---
@@ -200,7 +200,17 @@ class ExecutionEngine:
             'managed_count': managed_count
         }
 
-    def apply_trailing_stop(self, ticket, current_price, entry_price, action, current_sl, tp, atr, fractal_levels=None):
+    def apply_trailing_stop(self, trade, current_price, atr, fractal_levels=None):
+        """
+        Dynamically moves Stop Loss based on profit milestones.
+        Updates 'trade' dictionary in-place if successful.
+        """
+        ticket = trade.get('ticket')
+        entry_price = trade.get('open_price')
+        action = trade.get('action')
+        current_sl = trade.get('sl')
+        tp = trade.get('tp')
+        volume = trade.get('volume', 0.01)
         """
         Dynamically moves Stop Loss based on profit milestones.
         1. Break Even: If Profit > 1R.
@@ -230,9 +240,13 @@ class ExecutionEngine:
                 # 1. Close 50% of the trade (Bank Cash)
                 # 2. Move SL to Break Even (Risk Free Runner)
                 tp_dist = abs(tp - entry_price)
-                if tp_dist > 0 and profit >= (0.4 * tp_dist):
+                if tp_dist > 0 and profit >= (0.4 * tp_dist) and not trade.get('partial_closed', False):
                     if self.close_partial(ticket, 0.5):
                         print(f"💰 BANK & RUNNER: Target Hit (40% TP). Closed 50% of {ticket}.")
+                        # Update Trade State
+                        trade['volume'] = round(volume * 0.5, 2)
+                        trade['partial_closed'] = True
+                        
                         # IMMEDIATE BREAK EVEN
                         new_sl = entry_price + (atr * 0.1)
                         modification_reason = "Bank & Runner (BE Secured)"
@@ -259,9 +273,13 @@ class ExecutionEngine:
                 
                 # BANK & RUNNER LOGIC (Greedy but Safe)
                 tp_dist = abs(entry_price - tp)
-                if tp_dist > 0 and profit >= (0.4 * tp_dist):
+                if tp_dist > 0 and profit >= (0.4 * tp_dist) and not trade.get('partial_closed', False):
                     if self.close_partial(ticket, 0.5):
                          print(f"💰 BANK & RUNNER: Target Hit (40% TP). Closed 50% of {ticket}.")
+                         # Update Trade State
+                         trade['volume'] = round(volume * 0.5, 2)
+                         trade['partial_closed'] = True
+                         
                          # IMMEDIATE BREAK EVEN
                          new_sl = entry_price - (atr * 0.1)
                          modification_reason = "Bank & Runner (BE Secured)"
@@ -293,7 +311,7 @@ class ExecutionEngine:
                 if self.modify_order_sl(int(ticket), new_sl):
                      print(f"✅ SL UPDATE ({modification_reason}): Ticket {ticket} -> {new_sl}")
                      # Update local state so we don't spam requests
-                     # (Note: local state will refresh next loop from file, so this is just for awareness)
+                     trade['sl'] = new_sl  # PERSIST CHANGE
                 else:
                      print(f"⚠️ SL Update Failed (MT5 Error or connection).")
                     

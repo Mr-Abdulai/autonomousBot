@@ -67,55 +67,10 @@ class MarketSensor:
         
         return None
 
-    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculates RSI, EMA, ATR using pure pandas."""
-        # Ensure df is sorted by time
-        df = df.sort_values('time').reset_index(drop=True)
-        close = df['close']
-        high = df['high']
-        low = df['low']
-
-        # 1. EMA 13, 50 & 200
-        df['EMA_13'] = close.ewm(span=13, adjust=False).mean()
-        df['EMA_50'] = close.ewm(span=50, adjust=False).mean()
-        df['EMA_200'] = close.ewm(span=200, adjust=False).mean()
-
-        # 2. RSI 14
-        delta = close.diff()
-        gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-        loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-        rs = gain / loss
-        df['RSI_14'] = 100 - (100 / (1 + rs))
-
-        # 3. ATR 14
-        prev_close = close.shift(1)
-        tr1 = high - low
-        tr2 = (high - prev_close).abs()
-        tr3 = (low - prev_close).abs()
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        df['ATR_14'] = tr.ewm(alpha=1/14, adjust=False).mean()
-
-        # 4. Bollinger Bands (20, 2)
-        sma_20 = close.rolling(window=20).mean()
-        std_20 = close.rolling(window=20).std()
-        df['BB_Upper'] = sma_20 + (std_20 * 2)
-        df['BB_Lower'] = sma_20 - (std_20 * 2)
-        
-        # 5. MACD (12, 26, 9)
-        ema_12 = close.ewm(span=12, adjust=False).mean()
-        ema_26 = close.ewm(span=26, adjust=False).mean()
-        df['MACD'] = ema_12 - ema_26
-        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-        df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
-        
-        return df
-
     def get_market_data(self, n_candles: int = 500) -> pd.DataFrame:
         """
         Fetches n_candles from MT5, calculates indicators.
-        Returns DataFrame with 'time', 'open', 'high', 'low', 'close', 'tick_volume',
-        'RSI_14', 'EMA_50', 'EMA_200', 'ATR_14', 'BB_Upper', 'BB_Lower', 'MACD', 'MACD_Signal'.
-        'RSI_14', 'EMA_13', 'EMA_50', 'EMA_200', 'ATR_14', 'BB_Upper', 'BB_Lower', 'MACD', 'MACD_Signal'.
+        Returns DataFrame with 'time', 'close', 'RSI_14', 'EMA_50', etc.
         """
         if not self.initialize():
             raise ConnectionError("Could not connect to MT5 or find symbol.")
@@ -178,6 +133,12 @@ class MarketSensor:
         df['MACD'] = macd['MACD']
         df['MACDs'] = macd['MACDs']
         df['MACDh'] = macd['MACDh']
+        
+        # Fast MACD (6, 13, 4) for Scalping
+        # Using TA-Lib wrapper
+        macd_fast = TALib.macd(df['close'], fast=6, slow=13, signal=4)
+        df['MACD_Fast'] = macd_fast['MACD']
+        df['MACDs_Fast'] = macd_fast['MACDs']
         
         # 3. Volatility
         bb = TALib.bbands(df['close'])
@@ -453,6 +414,8 @@ FUNDAMENTAL CONTEXT:
                 "bb_lower": float(latest['BB_Lower']),
                 "macd": float(latest['MACD']),
                 "macd_signal": float(latest['MACDs']),
+                "macd_fast": float(latest.get('MACD_Fast', 0.0)),
+                "macd_signal_fast": float(latest.get('MACDs_Fast', 0.0)),
                 "trend_d1": trend_d1,
                 "spread": spread,
                 "trend_h4": trend_h4,

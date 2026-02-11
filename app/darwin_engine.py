@@ -310,9 +310,9 @@ class Sniper(ShadowStrategy):
                  return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
         
          if action == "HOLD":
-             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "No M5 Setup"}
+             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"No {self.name} PA Setup ({current_price:.5f} vs H:{high_20:.5f}/L:{low_20:.5f})"}
                  
-         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (M5={action}, HTF1_EMA13={h1_ema13:.2f}/EMA50={h1_ema50:.2f})"}
+         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (Base={action}, HTF1_EMA13={h1_ema13:.5f}/EMA50={h1_ema50:.5f})"}
 
     def clone(self, new_params: dict = None) -> 'Sniper':
         return Sniper(self.name, self.direction)
@@ -324,11 +324,10 @@ class RSI_Matrix(ShadowStrategy):
         LONG: RSI < LowerBound (Oversold).
         SHORT: RSI > UpperBound (Overbought).
     """
-    def __init__(self, lower=30, upper=70, direction="BOTH"):
-        name = f"RSI_Matrix_{direction}_{lower}_{upper}"
-        super().__init__(name, direction)
-        self.lower = lower
-        self.upper = upper
+    def __init__(self, name: str, direction: str = 'BOTH', params: dict = None):
+        super().__init__(name, direction, params)
+        self.lower = self.params.get('lower', 30)
+        self.upper = self.params.get('upper', 70)
 
     def _generate_raw_signal(self, df, indicators, mtf_data):
         # FIX: Robust Key Lookup (Sensor uses 'rsi', legacy uses 'RSI_14')
@@ -355,11 +354,11 @@ class RSI_Matrix(ShadowStrategy):
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
 
     def clone(self, new_params: dict = None) -> 'RSI_Matrix':
-        # RSI doesn't use self.params dict conventionally in init, it uses instance vars.
-        # We should map them.
-        lower = new_params.get('lower', self.lower) if new_params else self.lower
-        upper = new_params.get('upper', self.upper) if new_params else self.upper
-        return RSI_Matrix(lower=lower, upper=upper, direction=self.direction)
+        params = new_params if new_params else self.params.copy()
+        l = params.get('lower', 30)
+        u = params.get('upper', 70)
+        new_name = f"RSI_Matrix_{self.direction}_{l}_{u}"
+        return RSI_Matrix(new_name, self.direction, params)
 
 class MACD_Cross(ShadowStrategy):
     """
@@ -368,16 +367,21 @@ class MACD_Cross(ShadowStrategy):
         LONG: MACD Line > Signal Line.
         SHORT: MACD Line < Signal Line.
     """
-    def __init__(self, direction="BOTH", speed="STD"):
-        name = f"MACD_Cross_{direction}_{speed}"
-        super().__init__(name, direction)
-        self.speed = speed # Just for naming, uses pre-calc 'macd' and 'macd_signal'
+    def __init__(self, name: str, direction: str = 'BOTH', params: dict = None):
+        super().__init__(name, direction, params)
+        self.speed = self.params.get('speed', 'STD') 
 
     def _generate_raw_signal(self, df, indicators, mtf_data):
         # Note: MarketSensor provides 'macd' and 'macd_signal' (12,26,9) standard
         
-        macd_line = indicators.get('macd', indicators.get('MACD', 0))
-        signal_line = indicators.get('macd_signal', indicators.get('MACDs', 0))
+        if self.speed == 'FAST':
+            # Fast MACD (6, 13, 4)
+            macd_line = indicators.get('macd_fast', indicators.get('MACD_Fast', 0))
+            signal_line = indicators.get('macd_signal_fast', indicators.get('MACDs_Fast', 0))
+        else:
+            # Standard MACD (12, 26, 9)
+            macd_line = indicators.get('macd', indicators.get('MACD', 0))
+            signal_line = indicators.get('macd_signal', indicators.get('MACDs', 0))
         
         current_price = df.iloc[-1]['close']
         
@@ -391,8 +395,10 @@ class MACD_Cross(ShadowStrategy):
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
 
     def clone(self, new_params: dict = None) -> 'MACD_Cross':
-        speed = new_params.get('speed', self.speed) if new_params else self.speed
-        return MACD_Cross(direction=self.direction, speed=speed)
+        params = new_params if new_params else self.params.copy()
+        speed = params.get('speed', 'STD')
+        new_name = f"MACD_Cross_{self.direction}_{speed}"
+        return MACD_Cross(new_name, self.direction, params)
 
 class TrendPullback(ShadowStrategy):
     """
@@ -445,44 +451,49 @@ class DarwinEngine:
         self.strategies = []
         self.state_file = os.path.join(Config.BASE_DIR, "darwin_state.json")
         
-        # === PROJECT HIVE: SWARM GENERATION (54 Variants) ===
+        # === PROJECT HIVE: SWARM GENERATION (SHARPER EDITION) ===
         
-        # 1. TrendHawks (Fibonacci Sequence)
-        # 8 Periods * 2 Directions = 16 Variants
-        periods = [9, 13, 21, 34, 55, 89, 144, 200]
+        # 1. TrendHawks (Fibonacci Sequence - Optimized for M15)
+        # Removed 9/13 (Too Noisy) and 200 (Too Laggy). Focus on medium-term trend.
+        periods = [21, 34, 55, 89, 144] 
         for p in periods:
             self.strategies.append(TrendHawk(f"TrendHawk_LONG_{p}p", direction="LONG", params={'period': p}))
             self.strategies.append(TrendHawk(f"TrendHawk_SHORT_{p}p", direction="SHORT", params={'period': p}))
             
-        # 2. MeanReverters (Standard Deviations)
-        # 5 Deviations * 2 Directions = 10 Variants
-        devs = [1.0, 1.5, 2.0, 2.5, 3.0]
+        # 2. MeanReverters (Standard Deviations - Sharper Entries)
+        # Removed 1.0/1.5 SD (Too Loose). Added 3.5 SD (Extreme Reversion).
+        devs = [2.0, 2.5, 3.0, 3.5]
         for d in devs:
             lbl = f"{d:.1f}SD"
             self.strategies.append(MeanReverter(f"MeanRev_LONG_{lbl}", direction="LONG", params={'std_dev': d}))
             self.strategies.append(MeanReverter(f"MeanRev_SHORT_{lbl}", direction="SHORT", params={'std_dev': d}))
             
-        # 3. RSI Matrix (Boundaries)
-        # 5 Settings * 2 Directions = 10 Variants
-        # (Lower, Upper) tuples
+        # 3. RSI Matrix (Boundaries - Tighter Extremes)
+        # Removed 30/70 (Standard). Focused on 25/75 and tighter.
         rsi_settings = [
-            (30, 70), (25, 75), (20, 80), (15, 85), (10, 90)
+            (25, 75), (20, 80), (15, 85), (10, 90)
         ]
         for low, high in rsi_settings:
-            self.strategies.append(RSI_Matrix(lower=low, upper=high, direction="LONG"))
-            self.strategies.append(RSI_Matrix(lower=low, upper=high, direction="SHORT"))
+            p = {'lower': low, 'upper': high}
+            self.strategies.append(RSI_Matrix(f"RSI_{low}_{high}_LONG", direction="LONG", params=p))
+            self.strategies.append(RSI_Matrix(f"RSI_{low}_{high}_SHORT", direction="SHORT", params=p))
 
-        # 4. MACD Cross (Momentum)
-        # 2 Variants (Standard Speed 12/26/9)
-        # In future, can expand speed logic if MarketSensor supports custom MACD
-        self.strategies.append(MACD_Cross(direction="LONG", speed="STD"))
-        self.strategies.append(MACD_Cross(direction="SHORT", speed="STD"))
+        # 4. MACD Cross (Momentum - Multi-Speed)
+        # Added FAST variant (6, 13, 4) for quicker scalps on M15
+        self.strategies.append(MACD_Cross("MACD_Cross_LONG_STD", direction="LONG", params={'speed': 'STD'}))
+        self.strategies.append(MACD_Cross("MACD_Cross_SHORT_STD", direction="SHORT", params={'speed': 'STD'}))
+        
+        self.strategies.append(MACD_Cross("MACD_Cross_LONG_FAST", direction="LONG", params={'speed': 'FAST'}))
+        self.strategies.append(MACD_Cross("MACD_Cross_SHORT_FAST", direction="SHORT", params={'speed': 'FAST'}))
         
         # 5. The Sniper (Expert)
         # 1 Variant
         self.strategies.append(Sniper("Sniper_Elite", direction='BOTH'))
         
         # 6. TrendPullback (The Gap Filler)
+        # 2 Variants (Standard)
+        self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
+        self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
         # 2 Variants (Standard)
         self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
         self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
@@ -495,6 +506,18 @@ class DarwinEngine:
         if self.strategies:
             self.leader = self.strategies[0]
         self.last_scores = {}
+        
+    def _get_strategy_class(self, class_name):
+        """Helper to map string name to class object."""
+        mapping = {
+            'TrendHawk': TrendHawk,
+            'MeanReverter': MeanReverter,
+            'RSI_Matrix': RSI_Matrix,
+            'MACD_Cross': MACD_Cross,
+            'Sniper': Sniper,
+            'TrendPullback': TrendPullback
+        }
+        return mapping.get(class_name)
         
     def load_state(self):
         """Restores evolution history from disk with MEMORY DECAY."""
@@ -509,7 +532,6 @@ class DarwinEngine:
             decay_factor = 1.0
             
             # AGE CHECK: If memory is old (> 4 hours), compress the equity spread.
-            # This prevents yesterday's winner from dominating today's different market.
             if last_save_time:
                 try:
                     save_dt = datetime.fromisoformat(last_save_time)
@@ -518,57 +540,120 @@ class DarwinEngine:
                         print(f"🧠 Memory is Stale ({hours_old:.1f}h). Applying HEAVY DECAY (50%).")
                         decay_factor = 0.5
                     else:
-                        # Baseline Sleep Decay (Fresh Start Effect)
                         decay_factor = 0.95
                 except:
                     pass
 
-            for strat in self.strategies:
-                if strat.name in data:
-                    s_data = data[strat.name]
-                    
-                    # Restore Stats
-                    raw_equity = s_data.get('equity', 10000.0)
-                    
-                    # Apply Decay to PnL (Normalize towards 10k)
-                    pnl = raw_equity - 10000.0
-                    strat.phantom_equity = 10000.0 + (pnl * decay_factor)
-                    
-                    strat.peak_equity = max(10000.0, strat.phantom_equity) # Reset peak to current decoded equity
-                    strat.max_drawdown = s_data.get('dd', 0.0) * decay_factor # Reduce historical DD weight too
-                    
-                    # Reset Streaks on Session Change to allow fresh start
-                    if decay_factor < 1.0:
-                        strat.win_streak = 0
-                        strat.loss_streak = 0
-                    else:
-                        strat.win_streak = s_data.get('wins', 0)
-                        strat.loss_streak = s_data.get('losses', 0)
+            if 'population' in data:
+                # NEW FORMAT: Full Reconstruction (Preserves Mutations)
+                print("🧬 Loading Advanced Darwin State (Population Rehydration)...")
+                restored_strats = []
+                
+                for s_data in data['population']:
+                    try:
+                        cls_name = s_data.get('class')
+                        StratClass = self._get_strategy_class(cls_name)
+                        if not StratClass: continue
                         
-            print(f"🧬 Darwin Memory Loaded. Ecosystem restored (Decay: {decay_factor}).")
+                        # Re-instantiate
+                        name = s_data.get('name')
+                        direction = s_data.get('direction', 'BOTH')
+                        params = s_data.get('params', {})
+                        
+                        # Instantiate Strategy
+                        strat = StratClass(name, direction=direction, params=params)
+                        
+                        # Restore Metrics
+                        metrics = s_data.get('metrics', {})
+                        raw_equity = metrics.get('equity', 10000.0)
+                        
+                        # Apply Decay
+                        pnl = raw_equity - 10000.0
+                        strat.phantom_equity = 10000.0 + (pnl * decay_factor)
+                        strat.peak_equity = max(10000.0, strat.phantom_equity)
+                        strat.max_drawdown = metrics.get('dd', 0.0) * decay_factor
+                        strat.win_streak = metrics.get('wins', 0) if decay_factor >= 1.0 else 0
+                        strat.loss_streak = metrics.get('losses', 0) if decay_factor >= 1.0 else 0
+                        
+                        restored_strats.append(strat)
+                    except Exception as e:
+                        print(f"Failed to restore specific strategy {s_data.get('name', 'Unknown')}: {e}")
+                        
+                if restored_strats:
+                    self.strategies = restored_strats
+                    print(f"🧬 Successfully restored {len(self.strategies)} strategies from disk.")
+                else:
+                    print("⚠️ Failed to restore strategies. Using default population.")
+                    
+            else:
+                # LEGACY FORMAT: Partial Restore (Only metrics for matching names)
+                print("🧬 Loading Legacy Darwin State (Metrics Only)...")
+                
+                for strat in self.strategies:
+                    if strat.name in data:
+                        s_data = data[strat.name]
+                        # Restore Stats
+                        raw_equity = s_data.get('equity', 10000.0)
+                        
+                        # Apply Decay to PnL (Normalize towards 10k)
+                        pnl = raw_equity - 10000.0
+                        strat.phantom_equity = 10000.0 + (pnl * decay_factor)
+                        
+                        strat.peak_equity = max(10000.0, strat.phantom_equity)
+                        strat.max_drawdown = s_data.get('dd', 0.0) * decay_factor
+                        
+                        if decay_factor < 1.0:
+                            strat.win_streak = 0
+                            strat.loss_streak = 0
+                        else:
+                            strat.win_streak = s_data.get('wins', 0)
+                            strat.loss_streak = s_data.get('losses', 0)
+                            
+                print(f"🧬 Legacy Memory Loaded.")
+
         except Exception as e:
             print(f"Darwin Memory Load Error: {e}")
 
     def save_state(self):
-        """Persists evolution history to disk."""
-        data = {
-            'timestamp': datetime.now().isoformat()
-        }
+        """
+        Persists evolution history (Full Population) to disk.
+        Saves: Name, Class, Params, Metrics to ensure Mutations survive restart.
+        """
+        population_data = []
         for strat in self.strategies:
-            data[strat.name] = {
-                'equity': strat.phantom_equity,
-                'peak': strat.peak_equity,
-                'dd': strat.max_drawdown,
-                'wins': strat.win_streak,
-                'losses': strat.loss_streak
-            }
+            # Handle class name retrieval
+            cls_name = strat.__class__.__name__
+            
+            population_data.append({
+                'name': strat.name,
+                'class': cls_name,
+                'direction': strat.direction,
+                'params': strat.params,
+                'metrics': {
+                    'equity': strat.phantom_equity,
+                    'peak': strat.peak_equity,
+                    'dd': strat.max_drawdown,
+                    'wins': strat.win_streak,
+                    'losses': strat.loss_streak
+                }
+            })
+            
+        data = {
+            'timestamp': datetime.now().isoformat(),
+            'version': '2.0',
+            'population': population_data
+        }
         
         try:
-            # Atomic write
+            # Atomic write pattern
             temp = self.state_file + ".tmp"
             with open(temp, 'w') as f:
                 json.dump(data, f, indent=4)
-            os.replace(temp, self.state_file)
+            
+            if os.path.exists(self.state_file):
+                os.remove(self.state_file)
+            os.rename(temp, self.state_file)
+            
         except Exception as e:
             print(f"Darwin Save Error: {e}")
 

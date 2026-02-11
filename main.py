@@ -482,6 +482,7 @@ Current Leader: {darwin.leader.name}
                     print(f"DEBUG: Failed to log decision: {e}", flush=True)
                 
             # E. Execution Logic
+            execution_info = None  # FIX: Reset for loop iteration
             if decision['action'] in ["BUY", "SELL"]:
                 # Position Sizing
                 atr = df.iloc[-1]['ATR_14']
@@ -598,6 +599,27 @@ Current Leader: {darwin.leader.name}
                 # Log decision with execution info (if any)
                 # Ensure we log even if no trade was taken (HOLD/WAIT), but if taken, include details
                 dashboard.log_decision(decision, execution_info)
+            
+            # REALITY CHECK: Report BLOCKED signals
+            # If Darwin had a signal (BUY/SELL) but we didn't execute (units=0 or blocked upstream)
+            if 'darwin_signal' in locals():
+                darwin_action = darwin_signal.get('action', 'HOLD')
+                
+                if darwin_action in ['BUY', 'SELL']:
+                    # We wanted to trade. Did we?
+                    executed = False
+                    if 'execution_info' in locals() and execution_info:
+                        executed = True
+                        
+                    if not executed:
+                         # BLOCKED!
+                         source = darwin_signal.get('source', '')
+                         if source and source != "Unknown":
+                             # We simulate a "Blocked" event
+                             darwin.report_execution({'source': source}, 'BLOCKED')
+                             print(f"🛑 Darwin Feedback: Signal from {source} BLOCKED by System.")
+
+            # F. Daily Evolution Check (Maintenance)
             
             # PHASE 9: DAWN OF A NEW DAY (EVOLUTION TRIGGER)
             # Check for midnight (local time or server time) to run evolution
