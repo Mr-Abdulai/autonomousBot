@@ -195,8 +195,8 @@ class TrendHawk(ShadowStrategy):
             if current_price >= high_x:
                 p_sl = low_x 
                 risk = current_price - p_sl
-                if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
-                return {'action': 'BUY', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price + 2*risk}
+                if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Zero Risk Distance'}
+                return {'action': 'BUY', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price + 2*risk, 'reason': f'Breakout above {period}p High'}
                 
         # SELL LOGIC
         if (self.direction in ['SHORT', 'BOTH']) and is_bearish_trend:
@@ -204,8 +204,8 @@ class TrendHawk(ShadowStrategy):
             if current_price <= low_x:
                 p_sl = high_x 
                 risk = p_sl - current_price
-                if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
-                return {'action': 'SELL', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price - 2*risk}
+                if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Zero Risk Distance'}
+                return {'action': 'SELL', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price - 2*risk, 'reason': f'Breakout below {period}p Low'}
 
         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "No Breakout"}
 
@@ -247,12 +247,12 @@ class MeanReverter(ShadowStrategy):
         # Fade Highs (Sell at Top of Range)
         if close > my_upper and rsi > 65:
             # OPTIMIZED: Target Basis (SMA20) not EMA50 (too far)
-            return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': basis}
+            return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': basis, 'reason': f'BB Fade High ({user_std}SD)'}
             
         # Fade Lows (Buy at Bottom of Range)
         if close < my_lower and rsi < 35:
             # OPTIMIZED: Target Basis
-            return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis}
+            return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis, 'reason': f'BB Fade Low ({user_std}SD)'}
             
         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': "Inside Bands"}
 
@@ -346,12 +346,12 @@ class RSI_Matrix(ShadowStrategy):
         
         # Logic: Buy Low, Sell High
         if rsi < self.lower:
-            return {'action': 'BUY', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*0.995, 'tp': df.iloc[-1]['close']*1.01}
+            return {'action': 'BUY', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*0.995, 'tp': df.iloc[-1]['close']*1.01, 'reason': f'RSI Oversold ({rsi:.1f} < {self.lower})'}
             
         if rsi > self.upper:
-             return {'action': 'SELL', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*1.005, 'tp': df.iloc[-1]['close']*0.99}
+             return {'action': 'SELL', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*1.005, 'tp': df.iloc[-1]['close']*0.99, 'reason': f'RSI Overbought ({rsi:.1f} > {self.upper})'}
                 
-        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f'RSI Neutral ({rsi:.1f})'}
 
     def clone(self, new_params: dict = None) -> 'RSI_Matrix':
         params = new_params if new_params else self.params.copy()
@@ -387,12 +387,14 @@ class MACD_Cross(ShadowStrategy):
         
         # Crossover logic
         if macd_line > signal_line:
-             return {'action': 'BUY', 'confidence': 0.85, 'sl': current_price*0.995, 'tp': current_price*1.01}
+             speed_label = 'Fast' if self.speed == 'FAST' else 'Std'
+             return {'action': 'BUY', 'confidence': 0.85, 'sl': current_price*0.995, 'tp': current_price*1.01, 'reason': f'MACD Cross Up ({speed_label})'}
              
         if macd_line < signal_line:
-            return {'action': 'SELL', 'confidence': 0.85, 'sl': current_price*1.005, 'tp': current_price*0.99}
+             speed_label = 'Fast' if self.speed == 'FAST' else 'Std'
+             return {'action': 'SELL', 'confidence': 0.85, 'sl': current_price*1.005, 'tp': current_price*0.99, 'reason': f'MACD Cross Down ({speed_label})'}
                 
-        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Crossover'}
 
     def clone(self, new_params: dict = None) -> 'MACD_Cross':
         params = new_params if new_params else self.params.copy()
@@ -656,6 +658,24 @@ class DarwinEngine:
             
         except Exception as e:
             print(f"Darwin Save Error: {e}")
+
+    def report_execution(self, signal: dict, result: str):
+        """
+        Feedback loop from main.py.
+        Called when a trade is BLOCKED by Risk Manager or Chronos.
+        Penalizes the source strategy so Darwin can learn.
+        """
+        source = signal.get('source', '')
+        
+        if result == 'BLOCKED':
+            # Find the strategy that generated this signal
+            for strat in self.strategies:
+                if strat.name in source:
+                    # Penalize: Count as a loss (small penalty)
+                    strat.loss_streak += 1
+                    strat.win_streak = 0
+                    print(f"🧬 Darwin Feedback: {strat.name} penalized (Signal BLOCKED).")
+                    break
 
     def update(self, df: pd.DataFrame, indicators: dict, mtf_data: dict):
         current_price = df.iloc[-1]['close']
