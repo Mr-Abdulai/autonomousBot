@@ -141,7 +141,7 @@ class BIFBrain:
         elif htf2_trend == "BULLISH" and base_trend == "BEARISH" and base_hurst > 0.60:
             alignment_score = 0.5 # Valid, but cautious
             scout_mode = True
-            allowed_strategies = {"MeanReverter_LONG", "RSI_Matrix_LONG"} # Only buy dips
+            allowed_strategies = {"MeanReverter_LONG", "RSI_Matrix_LONG", "MACD_Cross_LONG", "TrendHawk_LONG"} # Buy dips + catch reversal
             trend_status = "BULLISH_PULLBACK"
             
         # HTF2 is Bearish, but BASE is pumping (Bullish + High Hurst)
@@ -150,7 +150,7 @@ class BIFBrain:
             alignment_score = 0.5
             scout_mode = True
             # FIX: Added TrendPullback (it is designed exactly for this)
-            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT"} # Only sell rallies
+            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT", "MACD_Cross_SHORT"} # Sell rallies + catch reversal
             trend_status = "BEARISH_PULLBACK"
 
         # 3. CHOPPY MARKET (Range)
@@ -173,7 +173,7 @@ class BIFBrain:
              # UPDATED: FALLBACK Mode - Allow Mean Reversion in unclear conditions
              # Markets spend 60-70% of time ranging, treat this as opportunity not threat
              alignment_score = 0.2  # Neutral-Positive (was -0.5)
-             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendHawk_LONG", "TrendHawk_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT"}
+             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendHawk_LONG", "TrendHawk_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT", "MACD_Cross_LONG", "MACD_Cross_SHORT", "Sniper_Elite"}
              trend_status = f"UNCLEAR ({base_trend}/{htf2_trend}) - Range Mode"
 
         return {

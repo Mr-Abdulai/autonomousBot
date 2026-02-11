@@ -40,7 +40,7 @@ const Cortex = () => {
     }, []);
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 max-w-6xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-purple-500/10 rounded-xl">
@@ -54,7 +54,7 @@ const Cortex = () => {
             </div>
 
             {/* BIF PHYSICS ENGINE VISUALIZATION */}
-            <div className="grid grid-cols-3 gap-6 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-10">
                 {/* 1. REGIME STATE */}
                 <div className="glass-card p-6 border-t-4 border-t-purple-500 relative overflow-hidden">
                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Market Regime</h3>
@@ -128,7 +128,7 @@ const Cortex = () => {
                         <div className="absolute left-[21px] top-6 w-3 h-3 rounded-full bg-purple-500 ring-4 ring-fintech-bg group-hover:ring-purple-500/20 transition-all"></div>
 
                         <div className="glass-card p-6 hover:bg-fintech-card transition-colors">
-                            <div className="flex justify-between items-start mb-4">
+                            <div className="flex flex-col sm:flex-row justify-between items-start mb-4 gap-2">
                                 <div className="flex items-center gap-3">
                                     <span className={`px-2 py-1 rounded text-xs font-bold ${log.Action === 'BUY' ? 'bg-green-500/20 text-green-400' :
                                         log.Action === 'SELL' ? 'bg-red-500/20 text-red-400' :

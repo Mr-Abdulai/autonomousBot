@@ -245,12 +245,12 @@ class MeanReverter(ShadowStrategy):
         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', close))
         
         # Fade Highs (Sell at Top of Range)
-        if close > my_upper and rsi > 65:
+        if close > my_upper and rsi > 60:
             # OPTIMIZED: Target Basis (SMA20) not EMA50 (too far)
             return {'action': 'SELL', 'confidence': 0.75, 'sl': close * 1.002, 'tp': basis, 'reason': f'BB Fade High ({user_std}SD)'}
             
         # Fade Lows (Buy at Bottom of Range)
-        if close < my_lower and rsi < 35:
+        if close < my_lower and rsi < 40:
             # OPTIMIZED: Target Basis
             return {'action': 'BUY', 'confidence': 0.75, 'sl': close * 0.998, 'tp': basis, 'reason': f'BB Fade Low ({user_std}SD)'}
             
@@ -413,7 +413,7 @@ class TrendPullback(ShadowStrategy):
         
         # 1. Trend Filter (Must be established)
         ema_200 = indicators.get('ema_200', indicators.get('EMA_200', 0))
-        if ema_200 == 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        if ema_200 == 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No EMA200 data'}
         
         # 2. Value Zones
         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
@@ -443,7 +443,7 @@ class TrendPullback(ShadowStrategy):
                      tp = current_price * 0.97
                      return {'action': 'SELL', 'confidence': 0.85, 'sl': sl, 'tp': tp, 'reason': "EMA50 Pullback (Trend Down)"}
 
-        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Pullback Setup'}
 
     def clone(self, new_params: dict = None) -> 'TrendPullback':
         return TrendPullback(self.name, self.direction)
@@ -493,10 +493,7 @@ class DarwinEngine:
         self.strategies.append(Sniper("Sniper_Elite", direction='BOTH'))
         
         # 6. TrendPullback (The Gap Filler)
-        # 2 Variants (Standard)
-        self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
-        self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
-        # 2 Variants (Standard)
+        # 2 Variants (Standard) — FIX: Removed duplicate registration
         self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
         self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
         
@@ -681,10 +678,14 @@ class DarwinEngine:
         current_price = df.iloc[-1]['close']
         regime_context = mtf_data.get('analysis', {}) 
         
+        # FIX (Flaw 8): Cache signals to avoid double generation in consensus
+        self._cached_signals = {}
+        
         for strat in self.strategies:
             strat.update_performance(current_price)
             if not strat.active_trade:
                 signal = strat.generate_signal(df, indicators, mtf_data)
+                self._cached_signals[strat.name] = signal  # Cache for reuse
                 if signal['action'] != 'HOLD':
                     strat.active_trade = {
                         'entry': current_price,
@@ -729,16 +730,23 @@ class DarwinEngine:
                 is_match = False
                 for allow_tag in allowed:
                     # Map BIF tag to Strat Name substring
+                    # FIX (Flaw 6): Complete tag map matching BIF tags → actual strategy name patterns
+                    # Each value is a list of substrings that ALL must appear in strat.name
                     tag_map = {
-                        "MeanReverter_LONG": "MeanRev_LONG",
-                        "MeanReverter_SHORT": "MeanRev_SHORT",
-                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
-                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
-                        "TrendHawk_LONG": "TrendHawk_LONG",
-                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                        "MeanReverter_LONG": ["MeanRev_LONG"],
+                        "MeanReverter_SHORT": ["MeanRev_SHORT"],
+                        "RSI_Matrix_LONG": ["RSI_", "_LONG"],  # RSI_25_75_LONG
+                        "RSI_Matrix_SHORT": ["RSI_", "_SHORT"],  # RSI_25_75_SHORT
+                        "TrendHawk_LONG": ["TrendHawk_LONG"],
+                        "TrendHawk_SHORT": ["TrendHawk_SHORT"],
+                        "TrendPullback_LONG": ["TrendPullback_LONG"],
+                        "TrendPullback_SHORT": ["TrendPullback_SHORT"],
+                        "MACD_Cross_LONG": ["MACD_Cross_LONG"],
+                        "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
+                        "Sniper_Elite": ["Sniper_Elite"]
                     }
-                    search_term = tag_map.get(allow_tag, allow_tag)
-                    if search_term in strat.name:
+                    search_terms = tag_map.get(allow_tag, [allow_tag])
+                    if all(term in strat.name for term in search_terms):
                         is_match = True
                         break
                 
@@ -875,16 +883,23 @@ class DarwinEngine:
                 is_match = False
                 for allow_tag in allowed:
                     # Map BIF tag to Strat Name substring
+                    # FIX (Flaw 6): Complete tag map matching BIF tags → actual strategy name patterns
+                    # Each value is a list of substrings that ALL must appear in strat.name
                     tag_map = {
-                        "MeanReverter_LONG": "MeanRev_LONG",
-                        "MeanReverter_SHORT": "MeanRev_SHORT",
-                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
-                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
-                        "TrendHawk_LONG": "TrendHawk_LONG",
-                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                        "MeanReverter_LONG": ["MeanRev_LONG"],
+                        "MeanReverter_SHORT": ["MeanRev_SHORT"],
+                        "RSI_Matrix_LONG": ["RSI_", "_LONG"],
+                        "RSI_Matrix_SHORT": ["RSI_", "_SHORT"],
+                        "TrendHawk_LONG": ["TrendHawk_LONG"],
+                        "TrendHawk_SHORT": ["TrendHawk_SHORT"],
+                        "TrendPullback_LONG": ["TrendPullback_LONG"],
+                        "TrendPullback_SHORT": ["TrendPullback_SHORT"],
+                        "MACD_Cross_LONG": ["MACD_Cross_LONG"],
+                        "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
+                        "Sniper_Elite": ["Sniper_Elite"]
                     }
-                    search_term = tag_map.get(allow_tag, allow_tag)
-                    if search_term in strat.name:
+                    search_terms = tag_map.get(allow_tag, [allow_tag])
+                    if all(term in strat.name for term in search_terms):
                         is_match = True
                         break
                 
@@ -927,16 +942,23 @@ class DarwinEngine:
             for strat in self.strategies:
                  is_match = False
                  for allow_tag in allowed:
+                    # FIX (Flaw 6): Complete tag map matching BIF tags → actual strategy name patterns
+                    # Each value is a list of substrings that ALL must appear in strat.name
                     tag_map = {
-                        "MeanReverter_LONG": "MeanRev_LONG",
-                        "MeanReverter_SHORT": "MeanRev_SHORT",
-                        "RSI_Matrix_LONG": "RSI_Matrix_LONG", 
-                        "RSI_Matrix_SHORT": "RSI_Matrix_SHORT",
-                        "TrendHawk_LONG": "TrendHawk_LONG",
-                        "TrendHawk_SHORT": "TrendHawk_SHORT"
+                        "MeanReverter_LONG": ["MeanRev_LONG"],
+                        "MeanReverter_SHORT": ["MeanRev_SHORT"],
+                        "RSI_Matrix_LONG": ["RSI_", "_LONG"],
+                        "RSI_Matrix_SHORT": ["RSI_", "_SHORT"],
+                        "TrendHawk_LONG": ["TrendHawk_LONG"],
+                        "TrendHawk_SHORT": ["TrendHawk_SHORT"],
+                        "TrendPullback_LONG": ["TrendPullback_LONG"],
+                        "TrendPullback_SHORT": ["TrendPullback_SHORT"],
+                        "MACD_Cross_LONG": ["MACD_Cross_LONG"],
+                        "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
+                        "Sniper_Elite": ["Sniper_Elite"]
                     }
-                    search_term = tag_map.get(allow_tag, allow_tag)
-                    if search_term in strat.name:
+                    search_terms = tag_map.get(allow_tag, [allow_tag])
+                    if all(term in strat.name for term in search_terms):
                         is_match = True
                         break
                  if is_match:
@@ -990,16 +1012,28 @@ class DarwinEngine:
         
         votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
         reasons = []
+        # FIX: Collect SL/TP from voters so consensus preserves strategy precision
+        voter_signals = {'BUY': [], 'SELL': []}
         
         print(f"⚖️ THE JURY IS IN SESSION. Members: {[s.name for s in jury]}")
         
         for juror in jury:
-            sig = juror.generate_signal(df, indicators, mtf_data)
+            # FIX (Flaw 8): Reuse cached signal from update() if available
+            sig = getattr(self, '_cached_signals', {}).get(juror.name) or juror.generate_signal(df, indicators, mtf_data)
             action = sig['action']
             votes[action] = votes.get(action, 0) + 1
             # ENHANCED LOGGING: Show the reason!
             reason_stub = sig.get('reason', 'No Signal')
             reasons.append(f"{juror.name}: {action} [{reason_stub}]")
+            
+            # Capture SL/TP from directional voters
+            if action in ['BUY', 'SELL'] and sig.get('sl', 0) != 0:
+                voter_signals[action].append({
+                    'name': juror.name,
+                    'sl': sig['sl'],
+                    'tp': sig['tp'],
+                    'confidence': sig.get('confidence', 0.5)
+                })
             
         # Decision Logic
         final_action = "HOLD"
@@ -1058,14 +1092,26 @@ class DarwinEngine:
         if 'ALL' not in allowed:
             scout_mode = True
 
+        # FIX: Extract best SL/TP from winning side (highest confidence voter)
+        best_sl = 0
+        best_tp = 0
+        if final_action in ['BUY', 'SELL'] and voter_signals[final_action]:
+            # Pick the voter with highest confidence for SL/TP
+            best_voter = max(voter_signals[final_action], key=lambda v: v['confidence'])
+            best_sl = best_voter['sl']
+            best_tp = best_voter['tp']
+            print(f"📐 Jury SL/TP from {best_voter['name']}: SL={best_sl:.5f}, TP={best_tp:.5f}")
+
         return {
             'action': final_action,
             'confidence': confidence,
             'reason': details,
             'source': f"Jury::{len(jury)}",
-            'darwin_score': self.last_scores.get(self.leader.name, 0), # Fallback score
+            'darwin_score': self.last_scores.get(self.leader.name, 0),
             'scout_mode': scout_mode,
-            'jury_votes': votes
+            'jury_votes': votes,
+            'sl': best_sl,
+            'tp': best_tp
         }
 
     def get_leaderboard(self) -> str:

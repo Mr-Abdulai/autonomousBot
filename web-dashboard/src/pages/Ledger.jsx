@@ -21,7 +21,7 @@ const Ledger = () => {
     }, []);
 
     return (
-        <div className="p-8 max-w-6xl mx-auto">
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 max-w-6xl mx-auto">
             <div className="flex items-center gap-4 mb-8">
                 <div className="p-3 bg-blue-500/10 rounded-xl">
                     <Wallet className="w-8 h-8 text-blue-400" />
@@ -32,7 +32,7 @@ const Ledger = () => {
                 </div>
             </div>
 
-            <div className="glass-card overflow-hidden">
+            <div className="glass-card overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="border-b border-fintech-border bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">

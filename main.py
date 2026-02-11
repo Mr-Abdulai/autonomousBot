@@ -306,8 +306,7 @@ Current Leader: {darwin.leader.name}
             # BUG FIX #12: TimeManager removed - use Config.OVERRIDE_TIME_GUARD instead
             # Market hours check removed (TimeManager file doesn't exist)
             # User can control via OVERRIDE_TIME_GUARD=true in .env to trade 24/7
-            
-            run_ai = True
+            # FIX: Removed `run_ai = True` override that was nullifying the Smart Filter
             
             # Gate 1: Spread Guard (Critical during News) - GOLD OPTIMIZED
             spread = latest_indicators.get('spread', 0)
@@ -380,17 +379,30 @@ Current Leader: {darwin.leader.name}
                 futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=48) # 4 Hours (was 12/1h)
                 
                 # 3. Simulate The Jury's Call
-                # Estimate TP/SL based on Decision (TrendHawk uses 2x Risk, etc)
-                # We'll use a standard test: 1 ATR Risk, 2 ATR Reward
+                # FIX: Use Darwin's SL/TP if available, else fallback to ATR
                 sim_action = darwin_signal.get('action', 'HOLD')
                 
                 if sim_action in ['BUY', 'SELL']:
+                    # Use Darwin's precise SL/TP distances
+                    darwin_sl = darwin_signal.get('sl', 0)
+                    darwin_tp = darwin_signal.get('tp', 0)
+                    
+                    if darwin_sl != 0 and darwin_tp != 0:
+                        sim_sl_dist = abs(current_price - darwin_sl)
+                        sim_tp_dist = abs(darwin_tp - current_price)
+                        print(f"🔮 Chronos using Darwin SL/TP: SL_dist={sim_sl_dist:.5f}, TP_dist={sim_tp_dist:.5f}")
+                    else:
+                        # Fallback to ATR-based distances
+                        sim_sl_dist = atr_val * 1.5
+                        sim_tp_dist = atr_val * 2.5
+                        print(f"🔮 Chronos fallback to ATR: SL_dist={sim_sl_dist:.5f}, TP_dist={sim_tp_dist:.5f}")
+                    
                     sim_result = chronos_arena.run_simulation(
                         signal_type=sim_action, 
                         futures=futures, 
                         entry_price=current_price, 
-                        sl_dist=atr_val * 1.5, # FIXED: Tighter SL for Simulation (was 2.5) to test accuracy
-                        tp_dist=atr_val * 2.5  # FIXED: Slightly easier target (was 3.0) 
+                        sl_dist=sim_sl_dist,
+                        tp_dist=sim_tp_dist
                     )
                     
                     print(f"🔮 Chronos Output: {sim_result['recommendation']} (WinRate: {sim_result['win_rate']:.2f}, Survival: {sim_result['survival_rate']:.2f})")
@@ -408,15 +420,25 @@ Current Leader: {darwin.leader.name}
                 else:
                     print("DEBUG: Chronos skipped (No Directional Signal).", flush=True)
 
-            # D. AI Strategy Layer (Groq)
+            # D. DECISION ASSEMBLY (Darwin Signal = Binding Vote)
+            # FIX: Darwin's consensus is now THE decision. Groq AI removed from decision chain.
+            # GOLD Confirmations still apply to boost/reduce confidence.
             analyzed_decision = {}  # BUG FIX #3: Initialize to prevent undefined variable crash
             
             if run_ai:
-                print("DEBUG: Calling Groq Strategist...", flush=True)
-                analyzed_decision = ai_strategist.get_trade_decision(market_summary, "")
-                print(f"DEBUG: Groq Response: {analyzed_decision}", flush=True)
-                # BUG FIX #1: PHASE 6 GOLD ENTRY CONFIRMATION - MOVED HERE
-                # Boost confidence with advanced indicators (VWAP, SuperTrend, RVI)
+                # Darwin's signal IS the decision
+                analyzed_decision = {
+                    'action': darwin_signal.get('action', 'HOLD'),
+                    'confidence_score': darwin_signal.get('confidence', 0.5),
+                    'reasoning_summary': darwin_signal.get('reason', 'Darwin Jury'),
+                    'source': darwin_signal.get('source', 'Darwin'),
+                }
+                
+                # Preserve Chronos result if it passed
+                if 'chronos_result' in decision:
+                    analyzed_decision['chronos_result'] = decision['chronos_result']
+
+                # GOLD ENTRY CONFIRMATIONS (Boost/Reduce Confidence)
                 if analyzed_decision['action'] in ['BUY', 'SELL']:
                     confidence_boost = 0.0
                     confirmations = []
@@ -454,14 +476,43 @@ Current Leader: {darwin.leader.name}
                         analyzed_decision['reasoning_summary'] = f"{analyzed_decision.get('reasoning_summary', '')} | GOLD Confirmations: {', '.join(confirmations)}"
                         print(f"💎 GOLD Quality Boost: {original_confidence:.2f} → {analyzed_decision['confidence_score']:.2f} (+{confidence_boost:.2f}) [{len(confirmations)} confirmations]")
 
+                # Gate D: GROQ AI CONFIDENCE MODIFIER
+                # Darwin's action is BINDING. Groq can only adjust confidence, never change direction.
+                if analyzed_decision['action'] in ['BUY', 'SELL']:
+                    try:
+                        print("🤖 Groq AI analyzing market context...", flush=True)
+                        groq_decision = ai_strategist.get_trade_decision(market_summary, "")
+                        groq_action = groq_decision.get('action', 'HOLD')
+                        groq_reasoning = groq_decision.get('reasoning_summary', '')
+                        
+                        pre_groq_conf = analyzed_decision['confidence_score']
+                        
+                        if groq_action == analyzed_decision['action']:
+                            # AI AGREES → Boost confidence
+                            analyzed_decision['confidence_score'] = min(pre_groq_conf + 0.15, 0.95)
+                            print(f"🤖 Groq AGREES ({groq_action}): Confidence {pre_groq_conf:.2f} → {analyzed_decision['confidence_score']:.2f} (+0.15)")
+                        elif groq_action == 'HOLD':
+                            # AI is uncertain → Small penalty
+                            analyzed_decision['confidence_score'] = max(pre_groq_conf - 0.10, 0.0)
+                            print(f"🤖 Groq UNCERTAIN (HOLD): Confidence {pre_groq_conf:.2f} → {analyzed_decision['confidence_score']:.2f} (-0.10)")
+                        else:
+                            # AI DISAGREES (opposite direction) → Larger penalty
+                            analyzed_decision['confidence_score'] = max(pre_groq_conf - 0.20, 0.0)
+                            print(f"🤖 Groq DISAGREES ({groq_action} vs {analyzed_decision['action']}): Confidence {pre_groq_conf:.2f} → {analyzed_decision['confidence_score']:.2f} (-0.20)")
+                        
+                        # Append AI reasoning to decision
+                        analyzed_decision['reasoning_summary'] = f"{analyzed_decision.get('reasoning_summary', '')} | AI: {groq_reasoning}"
+                    except Exception as e:
+                        print(f"🤖 Groq AI skipped (error: {e}). Using Darwin confidence as-is.")
+
                 decision = risk_manager.validate_signal(analyzed_decision)
-                
-                # [MOVED UP] -> Inserted earlier
                 
             # Log State
             swarm_state = darwin.get_swarm_state()
             
             # ORACLE BRIEFING
+            # NOTE (Flaw 7): darwin.leader is INFORMATIONAL ONLY — used for dashboard/Oracle, NOT trade decisions.
+            # Trade decisions come from get_consensus_signal() (Jury vote), not the leader.
             brief = oracle.generate_brief(
                 market_data=latest_indicators, # FIX: Pass Dict, not Str
                 regime={"trend": regime_tag, "summary": bif_context},
@@ -487,42 +538,45 @@ Current Leader: {darwin.leader.name}
                 # Position Sizing
                 atr = df.iloc[-1]['ATR_14']
                 
-                # BUG FIX #9: Removed scout mode dead code ('darwin_signal' never defined)
-                # Scout protocol logic removed (lines 432-458) - was never triggered
+                # FIX (Flaw 4 + 11): Use Darwin's SL/TP if available, else fallback to ATR
+                # Also renamed mtf_analysis to exec_mtf_analysis to avoid variable shadowing (Flaw 11)
+                darwin_sl_exec = decision.get('sl', darwin_signal.get('sl', 0) if 'darwin_signal' in dir() else 0)
+                darwin_tp_exec = decision.get('tp', darwin_signal.get('tp', 0) if 'darwin_signal' in dir() else 0)
                 
-                # STANDARD STOP LOSS & TAKE PROFIT LOGIC
-                sl_mult = decision.get("stop_loss_atr_multiplier", 2.5)  # GOLD: Default 2.5 (vs 1.5 forex)
-                
-                # PHASE 5A + GOLD: ADAPTIVE STOP LOSS based on Market Regime
-                # Get BIF metrics from MTF data
-                mtf_analysis = mtf_data.get('analysis', {})
-                mtf_stats = mtf_analysis.get('mtf_stats', {})
-                # FIX: Use BASE (M15) instead of hardcoded M5
-                base_stats = mtf_stats.get('BASE', {})
-                hurst = base_stats.get('hurst', 0.5)
-                entropy = base_stats.get('entropy', 0.7)
-                
-                # GOLD OPTIMIZED: Wider adjustments for volatility
-                # Trending Market (High Hurst): MUCH wider stops for Gold's explosive moves
-                if hurst > 0.6:
-                    sl_mult *= 1.5  # +50% wider in strong trends (vs 1.3x for forex)
-                    print(f"📊 Adaptive SL (GOLD): Trending market (H={hurst:.2f}), widening stops by 50%")
-                # Ranging Market (Low Hurst): Moderate tightening (Gold ranges are still volatile)
-                elif hurst < 0.4:
-                    sl_mult *= 0.9  # -10% tighter in ranging (vs 0.8x for forex, Gold needs room)
-                    print(f"📊 Adaptive SL (GOLD): Ranging market (H={hurst:.2f}), tightening stops by 10%")
-                
-                # Low Entropy = More Certainty = Slightly tighter
-                if entropy < 0.5:
-                    sl_mult *= 0.95  # -5% in clear markets (vs 0.9x for forex)
-                    print(f"📊 Adaptive SL (GOLD): Low entropy ({entropy:.2f}), tightening by 5%")
-                
-                if decision['action'] == "BUY":
-                    sl_price = current_price - (atr * sl_mult)
-                    tp_price = current_price + ((current_price - sl_price) * 2.0)
+                if darwin_sl_exec != 0 and darwin_tp_exec != 0:
+                    # Use Darwin's precise SL/TP
+                    sl_price = darwin_sl_exec
+                    tp_price = darwin_tp_exec
+                    print(f"📐 Using Darwin SL/TP: SL={sl_price:.5f}, TP={tp_price:.5f}")
                 else:
-                    sl_price = current_price + (atr * sl_mult)
-                    tp_price = current_price - ((sl_price - current_price) * 2.0)
+                    # FALLBACK: ATR-based SL/TP
+                    sl_mult = decision.get("stop_loss_atr_multiplier", 2.5)  # GOLD: Default 2.5
+                    
+                    # ADAPTIVE STOP LOSS based on Market Regime
+                    exec_mtf_analysis = mtf_data.get('analysis', {})
+                    exec_mtf_stats = exec_mtf_analysis.get('mtf_stats', {})
+                    base_stats = exec_mtf_stats.get('BASE', {})
+                    hurst = base_stats.get('hurst', 0.5)
+                    entropy = base_stats.get('entropy', 0.7)
+                    
+                    if hurst > 0.6:
+                        sl_mult *= 1.5
+                        print(f"📊 Adaptive SL (GOLD): Trending market (H={hurst:.2f}), widening stops by 50%")
+                    elif hurst < 0.4:
+                        sl_mult *= 0.9
+                        print(f"📊 Adaptive SL (GOLD): Ranging market (H={hurst:.2f}), tightening stops by 10%")
+                    
+                    if entropy < 0.5:
+                        sl_mult *= 0.95
+                        print(f"📊 Adaptive SL (GOLD): Low entropy ({entropy:.2f}), tightening by 5%")
+                    
+                    if decision['action'] == "BUY":
+                        sl_price = current_price - (atr * sl_mult)
+                        tp_price = current_price + ((current_price - sl_price) * 2.0)
+                    else:
+                        sl_price = current_price + (atr * sl_mult)
+                        tp_price = current_price - ((sl_price - current_price) * 2.0)
+                    print(f"📐 Using ATR Fallback SL/TP: SL={sl_price:.5f}, TP={tp_price:.5f}")
 
                 risk_distance = abs(current_price - sl_price)
                 

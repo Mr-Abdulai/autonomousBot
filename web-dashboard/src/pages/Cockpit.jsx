@@ -57,7 +57,7 @@ function Cockpit() {
     const decision = data?.last_decision || {};
 
     return (
-        <div className="p-8 space-y-6 max-w-7xl mx-auto">
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 space-y-6 max-w-7xl mx-auto">
             {/* 1. Header & Identity */}
             <div className="flex items-center justify-between mb-2">
                 <div>
@@ -73,7 +73,7 @@ function Cockpit() {
             </div>
 
             {/* 2. Financial Dashboard (The "Money" Row) */}
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4">
                 <MetricCardSmall icon={<Target className="text-yellow-400" />} label="Daily PnL" value={data?.daily_pnl} isCurrency highlight={data?.daily_pnl > 0} />
                 <MetricCardSmall icon={<Layers className="text-indigo-400" />} label="Total PnL (90d)" value={data?.total_pnl} isCurrency />
 
@@ -83,10 +83,10 @@ function Cockpit() {
             </div>
 
             {/* Main Grid */}
-            <div className="grid grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
                 {/* Left Col: Active Trade */}
-                <div className="col-span-4 space-y-6">
+                <div className="lg:col-span-4 space-y-6">
                     <div className={`glass-card p-6 relative overflow-hidden ${activeTrade ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-slate-700'}`}>
                         <h2 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-blue-400" />
@@ -177,10 +177,10 @@ function Cockpit() {
                 </div>
 
                 {/* Right Col: Ticker & Mini Chart */}
-                <div className="col-span-8 flex flex-col gap-6">
+                <div className="lg:col-span-8 flex flex-col gap-6">
 
                     {/* Phase 71: BIF Physics Row */}
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <MetricCard title="Market Regime" value={
                             (data?.bif_analysis?.hurst || 0.5) > 0.55 ? "TRENDING" :
                                 (data?.bif_analysis?.hurst || 0.5) < 0.45 ? "RANGING" : "RANDOM"
@@ -196,7 +196,7 @@ function Cockpit() {
                     </div>
 
                     {/* Ticker Row */}
-                    <div className="grid grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <MetricCard title="RSI (14)" value={market.rsi?.toFixed(1) || '--'} sub="Momentum" />
                         <MetricCard title="MACD" value={market.macd?.toFixed(4) || '--'} sub="Trend" />
                         <MetricCard title="ATR" value={market.atr?.toFixed(2) || '--'} sub="Volatility" />

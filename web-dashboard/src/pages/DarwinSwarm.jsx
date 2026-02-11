@@ -43,8 +43,8 @@ function DarwinSwarm() {
     const leader = topPerformers.length > 0 ? topPerformers[0] : null;
 
     return (
-        <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
-            <div className="flex justify-between items-center">
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 space-y-8 max-w-[1600px] mx-auto">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
                         <Hexagon className="text-yellow-500" /> Project Hive (Gen 2)

@@ -44,8 +44,8 @@ const DeepMarket = () => {
     const isUp = lastCandle.close > prevCandle.close;
 
     return (
-        <div className="p-8 space-y-6 max-w-7xl mx-auto h-screen flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 space-y-6 max-w-7xl mx-auto min-h-screen flex flex-col">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
                         <Activity className="text-blue-500" />
@@ -54,7 +54,7 @@ const DeepMarket = () => {
                     <div className="text-slate-400 text-sm mt-1">Real-time Technical Analysis Feed</div>
                 </div>
 
-                <div className="flex gap-6">
+                <div className="flex gap-4 sm:gap-6 flex-wrap">
                     <PriceStat label="Current Price" value={lastCandle.close.toFixed(2)} trend={isUp ? 'up' : 'down'} />
                     <PriceStat label="EMA (50)" value={lastCandle.EMA_50?.toFixed(2)} />
                     <PriceStat label="EMA (200)" value={lastCandle.EMA_200?.toFixed(2)} />

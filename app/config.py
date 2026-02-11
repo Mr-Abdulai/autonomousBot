@@ -26,7 +26,7 @@ class Config:
     
     # Execution Aggressiveness - GOLD OPTIMIZED
     # 0.8 = Aggressive (Scalping needs speed)
-    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.8"))  # Was 0.6, now 0.7 for Gold
+    EXECUTION_MODE = float(os.getenv("EXECUTION_MODE", "0.9"))  # Tuned up for aggression (was 0.8)
     
     # GOLD-SPECIFIC: Spread tolerance
     MAX_SPREAD_PIPS = 5.0  # Gold can have 2-5 pip spreads

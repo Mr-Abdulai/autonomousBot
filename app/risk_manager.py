@@ -151,7 +151,7 @@ class IronCladRiskManager:
         """Call this when a trade closes in profit."""
         from datetime import datetime
         self.last_win_time = datetime.now()
-        print("🔥 HOT HAND: Win registered. Next trade size boosted 1.5x!")
+        print("✅ Win registered. Tracking for momentum analysis.")
 
     def validate_signal(self, decision: dict) -> dict:
         """
