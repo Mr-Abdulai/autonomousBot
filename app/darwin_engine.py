@@ -581,6 +581,40 @@ class DarwinEngine:
                 if restored_strats:
                     self.strategies = restored_strats
                     print(f"🧬 Successfully restored {len(self.strategies)} strategies from disk.")
+                    
+                    # EXTINCTION CHECK ON LOAD:
+                    # If loaded state is damaged (missing key species), repair it immediately.
+                    required_seeds = [
+                        (TrendHawk,     "TrendHawk_LONG_55p",    "LONG",  {'period': 55}),
+                        (TrendHawk,     "TrendHawk_SHORT_55p",   "SHORT", {'period': 55}),
+                        (MeanReverter,  "MeanRev_LONG_2.5SD",    "LONG",  {'std_dev': 2.5}),
+                        (MeanReverter,  "MeanRev_SHORT_2.5SD",   "SHORT", {'std_dev': 2.5}),
+                        (MACD_Cross,    "MACD_Cross_LONG_FAST",  "LONG",  {'speed': 'FAST'}),
+                        (MACD_Cross,    "MACD_Cross_SHORT_FAST", "SHORT", {'speed': 'FAST'}),
+                        (RSI_Matrix,    "RSI_25_75_LONG",        "LONG",  {'lower': 25, 'upper': 75}),
+                        (RSI_Matrix,    "RSI_25_75_SHORT",       "SHORT", {'lower': 25, 'upper': 75}),
+                        (Sniper,        "Sniper_Elite",          "BOTH",  {}),
+                        (TrendPullback, "TrendPullback_LONG",    "LONG",  {}),
+                        (TrendPullback, "TrendPullback_SHORT",   "SHORT", {}),
+                    ]
+                    
+                    injected = 0
+                    for cls, name, direction, params in required_seeds:
+                        has_species = any(isinstance(s, cls) and s.direction == direction for s in self.strategies)
+                        if not has_species:
+                            seed = cls(name, direction=direction, params=params)
+                            # Replace weakest if full
+                            if len(self.strategies) >= 100:
+                                self.strategies.sort(key=lambda s: s.get_quality_score()) # Sort ascending (weakest first)
+                                self.strategies[0] = seed # Replace weakest
+                            else:
+                                self.strategies.append(seed)
+                            injected += 1
+                            print(f"🛡️ REPAIR ON LOAD: Injected {name} (species was missing on disk!)")
+                            
+                    if injected > 0:
+                        print(f"🛡️ Repaired ecosystem. Injected {injected} missing species.")
+                    
                 else:
                     print("⚠️ Failed to restore strategies. Using default population.")
                     
