@@ -775,13 +775,10 @@ class DarwinEngine:
         1. Select Elites (Top 20%) - They survive.
         2. Cull Weakest (Bottom 20%) - They die.
         3. Breed/Mutate Middle Class - They evolve.
+        4. EXTINCTION PROTECTION - Ensure minimum species diversity.
         """
         # Hard Cap to prevent explosion
         MAX_POPULATION = 100
-        
-        # 0. Check Timing (Only evolve once every 24h or if forced?)
-        # For now, let's call this manually or on startup if state is old?
-        # Let's just implement the mechanics.
         
         # Sort by Score
         self.strategies.sort(key=lambda s: s.get_quality_score(), reverse=True)
@@ -820,6 +817,44 @@ class DarwinEngine:
             
             if len(next_gen) >= MAX_POPULATION:
                 break
+        
+        # 4. EXTINCTION PROTECTION
+        # Ensure at least 1 seed of each critical strategy type/direction survives.
+        # Without this, evolution can kill entire species (MACD_Cross, Sniper, etc.)
+        required_seeds = [
+            # (class, name, direction, params)
+            (TrendHawk,     "TrendHawk_LONG_55p",    "LONG",  {'period': 55}),
+            (TrendHawk,     "TrendHawk_SHORT_55p",   "SHORT", {'period': 55}),
+            (MeanReverter,  "MeanRev_LONG_2.5SD",    "LONG",  {'std_dev': 2.5}),
+            (MeanReverter,  "MeanRev_SHORT_2.5SD",   "SHORT", {'std_dev': 2.5}),
+            (MACD_Cross,    "MACD_Cross_LONG_FAST",  "LONG",  {'speed': 'FAST'}),
+            (MACD_Cross,    "MACD_Cross_SHORT_FAST", "SHORT", {'speed': 'FAST'}),
+            (RSI_Matrix,    "RSI_25_75_LONG",        "LONG",  {'lower': 25, 'upper': 75}),
+            (RSI_Matrix,    "RSI_25_75_SHORT",       "SHORT", {'lower': 25, 'upper': 75}),
+            (Sniper,        "Sniper_Elite",          "BOTH",  {}),
+            (TrendPullback, "TrendPullback_LONG",    "LONG",  {}),
+            (TrendPullback, "TrendPullback_SHORT",   "SHORT", {}),
+        ]
+        
+        injected = 0
+        for cls, name, direction, params in required_seeds:
+            # Check if ANY strategy of this class+direction exists
+            has_species = any(
+                isinstance(s, cls) and s.direction == direction
+                for s in next_gen
+            )
+            if not has_species:
+                seed = cls(name, direction=direction, params=params)
+                # Replace the weakest strategy to stay within population cap
+                if len(next_gen) >= MAX_POPULATION:
+                    next_gen[-1] = seed
+                else:
+                    next_gen.append(seed)
+                injected += 1
+                print(f"🛡️ EXTINCTION PROTECTION: Injected {name} (species was extinct!)")
+        
+        if injected > 0:
+            print(f"🛡️ Protected {injected} endangered species from extinction.")
                 
         self.strategies = next_gen
         print(f"🧬 EVOLUTION COMPLETE. Population: {len(self.strategies)}")

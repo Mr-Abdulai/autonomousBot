@@ -37,15 +37,21 @@ def main():
     print(f"\n📌 Symbol: {symbol}")
     
     # 2. Get Market Data
-    sensor = MarketSensor()
-    df, indicators = sensor.get_latest_data(symbol)
-    mtf_data_raw = sensor.get_multi_timeframe_data(symbol)
+    sensor = MarketSensor(symbol=symbol)
+    try:
+        df = sensor.get_market_data()
+        mtf_data_raw = sensor.fetch_mtf_data()
+    except Exception as e:
+        print(f"❌ Failed to get market data: {e}")
+        mt5.shutdown()
+        return
     
     if df is None or df.empty:
         print("❌ No market data available.")
         mt5.shutdown()
         return
     
+    indicators = sensor.get_latest_indicators()
     current_price = df.iloc[-1]['close']
     print(f"📌 Current Price: {current_price:.5f}")
     

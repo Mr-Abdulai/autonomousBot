@@ -135,22 +135,36 @@ class BIFBrain:
             trend_status = f"TRENDING_{base_trend}"
 
             
-        # 2. THE SCOUT PROTOCOL (Tactical Counter-Trend)
+        # 2. THE SCOUT PROTOCOL (Both Directions Allowed)
         # HTF2 is Bullish, but BASE is crashing (Bearish + High Hurst)
-        # We want to buy the dip.
+        # PRIMARY: Buy the dip (LONG strategies).
+        # SECONDARY: Allow SHORT strategies too — if the swarm's best SHORT is firing,
+        # it may be riding real bearish momentum. Scout mode applies for safety.
         elif htf2_trend == "BULLISH" and base_trend == "BEARISH" and base_hurst > 0.60:
             alignment_score = 0.5 # Valid, but cautious
             scout_mode = True
-            allowed_strategies = {"MeanReverter_LONG", "RSI_Matrix_LONG", "MACD_Cross_LONG", "TrendHawk_LONG"} # Buy dips + catch reversal
+            allowed_strategies = {
+                # LONG (Buy the dip — primary play)
+                "MeanReverter_LONG", "RSI_Matrix_LONG", "MACD_Cross_LONG", "TrendHawk_LONG",
+                # SHORT (Ride the pullback momentum — secondary play)
+                "TrendHawk_SHORT", "MACD_Cross_SHORT", "MeanReverter_SHORT", "RSI_Matrix_SHORT",
+                "Sniper_Elite"
+            }
             trend_status = "BULLISH_PULLBACK"
             
         # HTF2 is Bearish, but BASE is pumping (Bullish + High Hurst)
-        # We want to sell the rally.
+        # PRIMARY: Sell the rally (SHORT strategies).
+        # SECONDARY: Allow LONG strategies too.
         elif htf2_trend == "BEARISH" and base_trend == "BULLISH" and base_hurst > 0.60:
             alignment_score = 0.5
             scout_mode = True
-            # FIX: Added TrendPullback (it is designed exactly for this)
-            allowed_strategies = {"MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT", "MACD_Cross_SHORT"} # Sell rallies + catch reversal
+            allowed_strategies = {
+                # SHORT (Sell the rally — primary play)
+                "MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT", "MACD_Cross_SHORT",
+                # LONG (Ride the bounce — secondary play)
+                "TrendHawk_LONG", "MACD_Cross_LONG", "MeanReverter_LONG", "RSI_Matrix_LONG",
+                "Sniper_Elite"
+            }
             trend_status = "BEARISH_PULLBACK"
 
         # 3. CHOPPY MARKET (Range)
