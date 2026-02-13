@@ -169,6 +169,7 @@ def main():
             
             # INJECT Regime for Darwin 2.0 (Smart Scoring)
             mtf_data['analysis'] = mtf_analysis['mtf_stats']
+            mtf_data['analysis']['trend'] = mtf_analysis['trend'] # FIX: Inject Trend for Boost
             
             bif_stats = mtf_analysis['mtf_stats']['BASE']
             alignment_score = mtf_analysis['alignment_score']
