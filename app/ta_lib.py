@@ -94,6 +94,14 @@ class TALib:
         return pd.DataFrame({'BBM': ma, 'BBU': upper, 'BBL': lower})
 
     @staticmethod
+    def keltner_channels(df: pd.DataFrame, length: int = 20, mult: float = 1.5) -> pd.DataFrame:
+        kc_middle = df['close'].ewm(span=length, adjust=False).mean()
+        atr = TALib.atr(df, length)
+        kc_upper = kc_middle + (atr * mult)
+        kc_lower = kc_middle - (atr * mult)
+        return pd.DataFrame({'KCM': kc_middle, 'KCU': kc_upper, 'KCL': kc_lower})
+
+    @staticmethod
     def macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
         ema_fast = series.ewm(span=fast, adjust=False).mean()
         ema_slow = series.ewm(span=slow, adjust=False).mean()

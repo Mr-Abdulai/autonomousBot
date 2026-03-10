@@ -375,22 +375,26 @@ class MACD_Cross(ShadowStrategy):
         # Note: MarketSensor provides 'macd' and 'macd_signal' (12,26,9) standard
         
         if self.speed == 'FAST':
-            # Fast MACD (6, 13, 4)
-            macd_line = indicators.get('macd_fast', indicators.get('MACD_Fast', 0))
-            signal_line = indicators.get('macd_signal_fast', indicators.get('MACDs_Fast', 0))
+            macd_curr = df.iloc[-1].get('MACD_Fast', 0)
+            signal_curr = df.iloc[-1].get('MACDs_Fast', 0)
+            macd_prev = df.iloc[-2].get('MACD_Fast', 0)
+            signal_prev = df.iloc[-2].get('MACDs_Fast', 0)
         else:
-            # Standard MACD (12, 26, 9)
-            macd_line = indicators.get('macd', indicators.get('MACD', 0))
-            signal_line = indicators.get('macd_signal', indicators.get('MACDs', 0))
+            macd_curr = df.iloc[-1].get('MACD', 0)
+            signal_curr = df.iloc[-1].get('MACDs', 0)
+            macd_prev = df.iloc[-2].get('MACD', 0)
+            signal_prev = df.iloc[-2].get('MACDs', 0)
         
         current_price = df.iloc[-1]['close']
         
-        # Crossover logic
-        if macd_line > signal_line:
+        # STRICT Crossover logic
+        # MACD crosses ABOVE Signal
+        if macd_curr > signal_curr and macd_prev <= signal_prev:
              speed_label = 'Fast' if self.speed == 'FAST' else 'Std'
              return {'action': 'BUY', 'confidence': 0.85, 'sl': current_price*0.995, 'tp': current_price*1.01, 'reason': f'MACD Cross Up ({speed_label})'}
              
-        if macd_line < signal_line:
+        # MACD crosses BELOW Signal
+        if macd_curr < signal_curr and macd_prev >= signal_prev:
              speed_label = 'Fast' if self.speed == 'FAST' else 'Std'
              return {'action': 'SELL', 'confidence': 0.85, 'sl': current_price*1.005, 'tp': current_price*0.99, 'reason': f'MACD Cross Down ({speed_label})'}
                 

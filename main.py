@@ -309,6 +309,21 @@ Current Leader: {darwin.leader.name}
             # User can control via OVERRIDE_TIME_GUARD=true in .env to trade 24/7
             # FIX: Removed `run_ai = True` override that was nullifying the Smart Filter
             
+            # --- IMPROVEMENT 1: TIME GUARD (Gate 0) ---
+            # Block Asian Session (00:00 to 08:00 UTC) and Weekends
+            if run_ai:
+                current_utc = datetime.now(timezone.utc)
+                is_weekend = current_utc.weekday() >= 5 # 5=Sat, 6=Sun
+                is_asian_session = 0 <= current_utc.hour < 8
+                
+                if is_weekend:
+                    decision['reasoning_summary'] = "Time Guard: Weekend Trading Blocked."
+                    run_ai = False
+                    print("DEBUG: Gate 0 (Time Guard) Blocked. It is the weekend.", flush=True)
+                elif is_asian_session:
+                    decision['reasoning_summary'] = "Time Guard: Asian Session (00:00-08:00 UTC) Blocked."
+                    run_ai = False
+                    print(f"DEBUG: Gate 0 (Time Guard) Blocked. Asian Session active ({current_utc.hour:02d}:00 UTC).", flush=True)
             # Gate 1: Spread Guard (Critical during News) - GOLD OPTIMIZED
             spread = latest_indicators.get('spread', 0)
             # Use Gold-specific spread tolerance (50 pts vs 20 pts for forex)
@@ -353,6 +368,17 @@ Current Leader: {darwin.leader.name}
                     
                     # Pass Confidence to Decision
                     decision['confidence_score'] = conf
+                    
+                    # --- IMPROVEMENT 2A: ENERGY STATE GUARD (Volatility Squeeze) ---
+                    # Only apply to momentum-hungry bots
+                    source_reason = str(darwin_signal.get('reason', ''))
+                    if "MACD" in source_reason or "TrendHawk" in source_reason:
+                         is_squeezing = latest_indicators.get('squeeze_on', False)
+                         if not is_squeezing:
+                             print(f"DEBUG: ⛔ Energy State Guard blocked {darwin_signal['action']}. Volatility is ALREADY EXPANDED (No Squeeze).", flush=True)
+                             decision['reasoning_summary'] = "VETO: Volatility Expanded. Missed origin of impulse."
+                             run_ai = False
+
 
             # PHASE 77: MAX TRADES GUARD
             # User reported over-trading. We must strictly enforce the limit BEFORE calling AI.
@@ -612,23 +638,24 @@ Current Leader: {darwin.leader.name}
                     units = risk_manager.calculate_position_size(account_info["equity"], current_price, sl_price)
                     print(f"📊 FIXED RISK: {len(leader_stats.trade_history)} trades (need 30 for Kelly)")
                 
-                # PHASE 5A: CHRONOS CONFIDENCE WEIGHTING
-                # Scale position size based on Chronos simulation results
-                if 'chronos_result' in decision:
-                    chronos_winrate = decision['chronos_result'].get('win_rate', 0.5)
-                    chronos_survival = decision['chronos_result'].get('survival_rate', 0.7)
-                    
-                    # Scale position: 40% WR = 0.7x, 50% = 1.0x, 70% = 1.3x
-                    # STRICT 1% RULE: We can DOWNSIZE risk, but NEVER UPSIZE beyond 1.0x
-                    chronos_multiplier = 0.5 + (chronos_winrate * 1.0)
-                    
-                    # Cap at 1.0 max (Strict Risk Compliance)
-                    chronos_multiplier = max(0.5, min(1.0, chronos_multiplier))
-                    
-                    units *= chronos_multiplier
-                    print(f"🔮 Chronos Scaling: {chronos_multiplier:.2f}x (WinRate: {chronos_winrate:.1%}, Survival: {chronos_survival:.1%}) - Capped at 1.0x")
+                # --- IMPROVEMENT 2B: SWARM-KELLY DYNAMIC BET SIZING ---
+                # Dynamically scale risk utilizing the intersection of Swarm Confidence and Chronos WinProb
+                swarm_conf = decision.get('confidence_score', 0.5)
+                chronos_winrate = decision.get('chronos_result', {}).get('win_rate', 0.5) if 'chronos_result' in decision else 0.5
+                
+                risk_multiplier = 1.0
+                
+                if swarm_conf >= 0.85 and chronos_winrate >= 0.75:
+                    risk_multiplier = 1.5  # Bet Aggressive (High Conviction)
+                    print(f"🔥 SWARM-KELLY MATRIX: High Conviction (Conf: {swarm_conf:.2f}, Chronos: {chronos_winrate:.2f}). Scaling risk 1.5x!")
+                elif swarm_conf <= 0.60 or chronos_winrate <= 0.55:
+                    risk_multiplier = 0.5  # Bet Defensive (Low Conviction)
+                    print(f"🛡️ SWARM-KELLY MATRIX: Low Conviction (Conf: {swarm_conf:.2f}, Chronos: {chronos_winrate:.2f}). Slashing risk 0.5x!")
                 else:
-                    print("🔮 Chronos: No simulation data, using base position size")
+                    print(f"⚖️ SWARM-KELLY MATRIX: Neutral Conviction (Conf: {swarm_conf:.2f}, Chronos: {chronos_winrate:.2f}). Base risk 1.0x")
+                
+                units *= risk_multiplier
+                units = max(round(units, 2), 0.01) # Ensure min volume limits
 
                 # PHASE 77: MARKOV CONVICTION BETTING
                 # If the Brain is confused (Low Probability), we scale down.

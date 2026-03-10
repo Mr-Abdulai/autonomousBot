@@ -147,6 +147,15 @@ class MarketSensor:
         
         df['ATR_14'] = TALib.atr(df, 14)
         
+        kc = TALib.keltner_channels(df)
+        df['KC_Upper'] = kc['KCU']
+        df['KC_Lower'] = kc['KCL']
+        
+        # IMPROVEMENT 2: Squeeze Indicator
+        # Squeeze is ON when Bollinger Bands are completely inside Keltner Channels
+        df['squeeze_on'] = (df['BB_Lower'] > df['KC_Lower']) & (df['BB_Upper'] < df['KC_Upper'])
+
+        
         return df
 
     def get_trend_data(self, timeframe, n_candles=200):
