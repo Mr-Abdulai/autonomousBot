@@ -79,7 +79,7 @@ def main():
     }
     # INSTITUTIONAL UPGRADE 5: Asynchronous Tick-Level Execution
     last_strategy_run = datetime.min
-    strategy_refresh_interval = timedelta(seconds=Config.SLEEP_SECONDS)
+    strategy_refresh_interval = timedelta(seconds=60) # Execute Deep Matrix every 60 seconds
     
     while True:
         try:
