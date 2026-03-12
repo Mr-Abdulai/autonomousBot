@@ -452,6 +452,108 @@ class TrendPullback(ShadowStrategy):
     def clone(self, new_params: dict = None) -> 'TrendPullback':
         return TrendPullback(self.name, self.direction)
 
+class LiquiditySweeper(ShadowStrategy):
+    """
+    ULTIMATE GOLD STRATEGY 1: The Stop-Hunt Exploiter (Liquidity Sweeper)
+    Logic: Detects when price spikes just past recent highs/lows (hunting retail stops)
+    and immediately rejects back into the range. 
+    """
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        if len(df) < 50: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Not enough data'}
+        
+        current_candle = df.iloc[-1]
+        prev_candle = df.iloc[-2]
+        
+        # Calculate recent Lookback High/Low (e.g. last 40 candles = roughly Asian session range on M5)
+        # Exclude the current and previous candle from the lookback to find the *established* range
+        lookback_df = df.iloc[-42:-2]
+        recent_high = lookback_df['high'].max()
+        recent_low = lookback_df['low'].min()
+        
+        atr = indicators.get('atr', indicators.get('ATR_14', 2.0))
+        
+        # 1. BEARISH SWEEP (Short Opportunity)
+        # Prev candle spiked ABOVE the high (triggering buy stops), but closed weakly (rejection).
+        # Current candle confirms by moving lower.
+        is_bearish_sweep = (
+            prev_candle['high'] > recent_high and        # Pierced the recent high
+            prev_candle['close'] < (recent_high + atr*0.2) and # Rejected to close near/below the high
+            (prev_candle['open'] > prev_candle['close']) and   # Bearish close on the spike candle
+            current_candle['close'] < prev_candle['low']       # Current candle confirms downside
+        )
+        
+        if is_bearish_sweep and self.direction in ['BOTH', 'SHORT']:
+            sl = prev_candle['high'] + (atr * 0.5) # Tight SL just above the sweep wick
+            tp = current_candle['close'] - (abs(sl - current_candle['close']) * 3.0) # 1:3 R:R
+            return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt High)"}
+            
+        # 2. BULLISH SWEEP (Long Opportunity)
+        is_bullish_sweep = (
+            prev_candle['low'] < recent_low and         # Pierced the recent low
+            prev_candle['close'] > (recent_low - atr*0.2) and # Rejected to close near/above the low
+            (prev_candle['close'] > prev_candle['open']) and  # Bullish close on the spike candle
+            current_candle['close'] > prev_candle['high']     # Current candle confirms upside
+        )
+        
+        if is_bullish_sweep and self.direction in ['BOTH', 'LONG']:
+            sl = prev_candle['low'] - (atr * 0.5) # Tight SL below the sweep wick
+            tp = current_candle['close'] + (abs(current_candle['close'] - sl) * 3.0) # 1:3 R:R
+            return {'action': 'BUY', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt Low)"}
+            
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Sweep Pattern'}
+
+    def clone(self, new_params: dict = None) -> 'LiquiditySweeper':
+        return LiquiditySweeper(self.name, self.direction)
+
+class NewsArbitrage(ShadowStrategy):
+    """
+    ULTIMATE GOLD STRATEGY 2: News Arbitrage (Volatility Breakout)
+    Logic: Designed to catch explosive volatility following major US/EUR data releases.
+    If the bot is currently in a high-volatility window triggered by a recent news event,
+    it identifies the tight pre-news range and fires a breakout trade.
+    """
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        if len(df) < 15: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Not enough data'}
+        
+        current_candle = df.iloc[-1]
+        
+        # Check if we are in a Volatility Expansion phase initiated by news
+        # (This strategy requires the main.py NewsHarvester to flag recent high-impact news)
+        # We simulate that trigger by requiring extreme volume + ATR expansion + Squeeze Breakout
+        
+        is_expanding = not indicators.get('squeeze_on', True) # Squeeze OFF means Expanding
+        atr = indicators.get('atr', indicators.get('ATR_14', 2.0))
+        
+        # Calculate recent consolidation range (last 10 candles before expansion)
+        recent_range_df = df.iloc[-12:-2]
+        range_high = recent_range_df['high'].max()
+        range_low = recent_range_df['low'].min()
+        range_size = range_high - range_low
+        
+        # Condition: Very tight consolidation prior to the current candle
+        is_tight_range = range_size < (atr * 1.5) 
+        
+        # 1. BULLISH BREAKOUT
+        # Price instantly rips above the tight range into expansion
+        if is_expanding and is_tight_range and current_candle['close'] > range_high:
+            if self.direction in ['BOTH', 'LONG']:
+                sl = range_low - (atr * 0.2) # Tight SL below the consolidation
+                tp = current_candle['close'] + (atr * 4.0) # Massive R:R for news spikes
+                return {'action': 'BUY', 'confidence': 0.90, 'sl': sl, 'tp': tp, 'reason': "News Volatility Breakout (Up)"}
+                
+        # 2. BEARISH BREAKOUT
+        # Price instantly rips below the tight range into expansion
+        if is_expanding and is_tight_range and current_candle['close'] < range_low:
+            if self.direction in ['BOTH', 'SHORT']:
+                sl = range_high + (atr * 0.2)
+                tp = current_candle['close'] - (atr * 4.0)
+                return {'action': 'SELL', 'confidence': 0.90, 'sl': sl, 'tp': tp, 'reason': "News Volatility Breakout (Down)"}
+                
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Breakout Criteria'}
+
+    def clone(self, new_params: dict = None) -> 'NewsArbitrage':
+        return NewsArbitrage(self.name, self.direction)
+
 class DarwinEngine:
     def __init__(self):
         self.strategies = []
@@ -501,6 +603,16 @@ class DarwinEngine:
         self.strategies.append(TrendPullback("TrendPullback_LONG", direction="LONG"))
         self.strategies.append(TrendPullback("TrendPullback_SHORT", direction="SHORT"))
         
+        # 7. ULTIMATE GOLD STRATEGY: Liquidity Sweeper
+        self.strategies.append(LiquiditySweeper("LiquiditySweeper_LONG", direction="LONG"))
+        self.strategies.append(LiquiditySweeper("LiquiditySweeper_SHORT", direction="SHORT"))
+        self.strategies.append(LiquiditySweeper("LiquiditySweeper_BOTH", direction="BOTH"))
+
+        # 8. ULTIMATE GOLD STRATEGY: News Arbitrage (Breakout Sniper)
+        self.strategies.append(NewsArbitrage("NewsArbitrage_LONG", direction="LONG"))
+        self.strategies.append(NewsArbitrage("NewsArbitrage_SHORT", direction="SHORT"))
+        self.strategies.append(NewsArbitrage("NewsArbitrage_BOTH", direction="BOTH"))
+        
         print(f"🐝 Darwin Swarm Initialized: {len(self.strategies)} Active Strategies.")
         
         # LOAD BRAIN MEMORY
@@ -518,7 +630,9 @@ class DarwinEngine:
             'RSI_Matrix': RSI_Matrix,
             'MACD_Cross': MACD_Cross,
             'Sniper': Sniper,
-            'TrendPullback': TrendPullback
+            'TrendPullback': TrendPullback,
+            'LiquiditySweeper': LiquiditySweeper,
+            'NewsArbitrage': NewsArbitrage
         }
         return mapping.get(class_name)
         

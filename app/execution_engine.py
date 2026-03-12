@@ -279,35 +279,48 @@ class ExecutionEngine:
         except Exception as e:
             print(f"Trailing Stop Error: {e}")
 
-    def check_cycling_condition(self, active_trades: list, current_price: float) -> dict:
+    def check_pyramiding_condition(self, active_trades: list, current_price: float) -> dict:
         """
-        Checks if we can 'Cycle' (Close T1 to open New) based on profit milestones.
+        ULTIMATE GOLD STRATEGY 3: Dynamic Grid Scaling (The Pyramiding Protocol)
+        Checks if we can add a new position to an already winning trend.
         Rule: 
-        - Trade 1 (Oldest) >= 80% to TP
-        - Trade 2 (Next)   >= 40% to TP
+        - Find a trade that is significantly in profit (>1.5R)
+        - The trade MUST have its Stop Loss already moved to Break-Even or better (Risk-Free).
+        - Ensure we haven't already pyramided off this specific trade ticket.
         
-        Returns: {'can_cycle': bool, 'trade_to_close': ticket}
+        Returns: {'can_pyramid': bool, 'base_trade': trade_dict, 'action_to_take': str}
         """
-        if len(active_trades) < 2:
-            return {'can_cycle': False, 'trade_to_close': None}
+        if not active_trades:
+            return {'can_pyramid': False, 'base_trade': None, 'action_to_take': None}
             
-        # 1. Identify Trades (Assuming list is ordered by time, which it usually is from main.py append)
-        # We should strictly sort by ticket just to be safe (lower ticket = older)
-        sorted_trades = sorted(active_trades, key=lambda x: x['ticket'])
-        t1 = sorted_trades[0]
-        t2 = sorted_trades[1]
-        
-        # 2. Check T1 Progress (>= 80%)
-        t1_prog = self._calculate_progress(t1, current_price)
-        if t1_prog < 0.80:
-            return {'can_cycle': False, 'trade_to_close': None}
+        for trade in active_trades:
+            # Check if we already pyramided off this trade
+            if trade.get('pyramided', False):
+                continue
+                
+            entry = trade['open_price']
+            action = trade['action']
+            sl = trade['sl']
             
-        # 3. Check T2 Progress (>= 40%)
-        t2_prog = self._calculate_progress(t2, current_price)
-        if t2_prog < 0.40:
-            return {'can_cycle': False, 'trade_to_close': None}
+            # Prevent Div/0 on weird trades
+            if sl == entry: continue 
             
-        return {'can_cycle': True, 'trade_to_close': t1['ticket']}
+            initial_risk = abs(entry - sl)
+            
+            # Risk-Free Check & Profit Milestone
+            if action == 'BUY':
+                profit = current_price - entry
+                is_risk_free = sl > entry
+                if is_risk_free and profit > (initial_risk * 1.5):
+                    return {'can_pyramid': True, 'base_trade': trade, 'action_to_take': 'BUY'}
+                    
+            elif action == 'SELL':
+                profit = entry - current_price
+                is_risk_free = sl < entry
+                if is_risk_free and profit > (initial_risk * 1.5):
+                    return {'can_pyramid': True, 'base_trade': trade, 'action_to_take': 'SELL'}
+                    
+        return {'can_pyramid': False, 'base_trade': None, 'action_to_take': None}
 
     def _calculate_progress(self, trade, current_price):
         """Calculates how close a trade is to TP (0.0 to 1.0)."""
@@ -428,4 +441,27 @@ class ExecutionEngine:
                 
         except Exception as e:
             print(f"Partial Close Error: {e}")
+            return False
+
+    def _mark_trade_pyramided(self, ticket) -> bool:
+        """
+        Marks a specific trade in state as having already spawned a pyramid position.
+        Prevents infinite scaling loops off the same base trade.
+        """
+        try:
+            states = self.load_state()
+            found = False
+            for t in states:
+                if str(t['ticket']) == str(ticket):
+                    t['pyramided'] = True
+                    found = True
+                    break
+            
+            if found:
+                self.save_state(states)
+                return True
+            return False
+            
+        except Exception as e:
+            print(f"Pyramid Marking Error: {e}")
             return False

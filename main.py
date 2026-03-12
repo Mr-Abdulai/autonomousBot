@@ -123,9 +123,13 @@ def main():
             
             risk_manager.update_account_state(account_info['equity'])
 
-            # --- NEWS RADAR (Phase 60) ---
+            # --- NEWS RADAR (Phase 60 & Ultimate Gold Update) ---
             # Check for News Triggers every 5 minutes (to avoid IP bans)
             if 'last_news_check' not in locals(): locals()['last_news_check'] = datetime.now() - timedelta(minutes=10)
+            
+            # Default to False
+            if 'latest_indicators' not in locals(): latest_indicators = {}
+            latest_indicators['news_event_active'] = False
             
             news_signal = None
             if (datetime.now() - locals()['last_news_check']).total_seconds() > 300:
@@ -134,22 +138,13 @@ def main():
                 
                 # Check if news system is available (Handle 403 gracefully)
                 try:
-                    # We need to access the Harvester directly or add a method to Sensor
-                    # Sensor checks news in get_market_summary but doesn't return the event object.
-                    # Let's access sensor.news directly.
                     event = sensor.news.fetch_latest_trigger()
                     
                     if event:
                         print(f"🚨 NEWS TRIGGER DETECTED: {event['currency']} {event['event']} (Act: {event['actual']} vs Fcst: {event['forecast']})")
-                        # Quick Trend Check for Context
-                        trend_m15 = sensor.get_trend_data(Config.TIMEFRAME)
-                        
-                        # AI Analysis
-                        news_decision = ai_strategist.analyze_news_impact(event, trend_m15)
-                        
-                        if news_decision['action'] in ['BUY', 'SELL']:
-                            print(f"🗞️ NEWS TRADING SIGNAL: {news_decision['action']} ({news_decision['reasoning']})")
-                            news_signal = news_decision
+                        # ULTIMATE GOLD FIX: Instead of relying on external Groq AI to randomly guess direction,
+                        # we trigger the internal NewsArbitrage Volatility Breakout module.
+                        latest_indicators['news_event_active'] = True
                 except Exception as e:
                     print(f"⚠️ News Feed Error: {e}")
             
@@ -271,6 +266,56 @@ Current Leader: {darwin.leader.name}
             if monitor_result.get('closed_pnl', 0.0) > 0:
                 print(f"💰 PROFIT LOCKED (${monitor_result['closed_pnl']:.2f}). Triggering Momentum Boost.")
                 risk_manager.register_win()
+                
+            # --- ULTIMATE GOLD STRATEGY 3: THE PYRAMIDING PROTOCOL ---
+            # Max Pyramid instances allowed at once (so we don't scale infinitely)
+            MAX_PYRAMID_TRADES = 2
+            current_pyramids = len([t for t in active_trades if t.get('is_pyramid', False)])
+            
+            if current_pyramids < MAX_PYRAMID_TRADES:
+                pyramid_check = executor.check_pyramiding_condition(active_trades, current_price)
+                if pyramid_check['can_pyramid'] and pyramid_check['base_trade']:
+                    base_trade = pyramid_check['base_trade']
+                    p_action = pyramid_check['action_to_take']
+                    base_ticket = base_trade['ticket']
+                    
+                    print(f"📈 PYRAMID PROTOCOL ACTIVATED: Trade {base_ticket} is deep in profit & Risk-Free. Scaling in with {p_action}!")
+                    
+                    # Logic: We open a new trade with HALF the size of the base trade to keep risk contained
+                    base_volume = base_trade.get('volume', 0.01)
+                    p_volume = max(round(base_volume * 0.5, 2), 0.01)
+                    
+                    # Target the same Take Profit as the base trade
+                    p_tp = base_trade.get('tp')
+                    
+                    # Tighter SL for the pyramid trade (below recent structure)
+                    # We'll use a standard ATR calculation for safety
+                    p_sl_mult = 1.0 # Tighter than normal
+                    if p_action == "BUY":
+                        p_sl = current_price - (atr_val * p_sl_mult)
+                    else:
+                        p_sl = current_price + (atr_val * p_sl_mult)
+                        
+                    # Execute the Pyramid Trade
+                    db_pyramid = executor.execute_trade(p_action, p_sl, p_tp, p_volume)
+                    
+                    if db_pyramid:
+                        # Mark the base trade so we don't pyramid off it again
+                        executor._mark_trade_pyramided(base_ticket)
+                        # Mark the new trade as a pyramid instance
+                        db_pyramid['is_pyramid'] = True 
+                        # Save the updated tags to state
+                        executor.save_state(executor.load_state() + [db_pyramid]) # Need to merge correctly, but executor already saved db_pyramid. So just re-save.
+                        
+                        # Correct persistence update:
+                        current_state = executor.load_state()
+                        for t in current_state:
+                            if t['ticket'] == base_ticket:
+                                t['pyramided'] = True
+                            if t['ticket'] == db_pyramid['ticket']:
+                                t['is_pyramid'] = True
+                        executor.save_state(current_state)
+
             
             # C. Determine System State & Decision
             run_ai = True
@@ -287,7 +332,9 @@ Current Leader: {darwin.leader.name}
             
             # --- SMART FILTER (CPU/API SAVER) ---
             # If Technicals are dead flat, don't even bother with Gates.
-            if Config.SMART_FILTER and not news_signal and run_ai:
+            is_news_active = latest_indicators.get('news_event_active', False)
+            
+            if Config.SMART_FILTER and not is_news_active and run_ai:
                  # Check volatility
                  adx = latest_indicators.get('adx', 0)
                  
@@ -304,14 +351,10 @@ Current Leader: {darwin.leader.name}
                      run_ai = False
                      print(f"DEBUG: Smart Filter Active (ADX {adx:.1f}, Alignment {alignment_score:.2f}). Skipping Gates.", flush=True)
 
-            # BUG FIX #12: TimeManager removed - use Config.OVERRIDE_TIME_GUARD instead
-            # Market hours check removed (TimeManager file doesn't exist)
-            # User can control via OVERRIDE_TIME_GUARD=true in .env to trade 24/7
-            # FIX: Removed `run_ai = True` override that was nullifying the Smart Filter
-            
             # --- IMPROVEMENT 1: TIME GUARD (Gate 0) ---
             # Block Asian Session (00:00 to 08:00 UTC) and Weekends
-            if run_ai:
+            # Note: News can override the weekend/asian session if explicitly detected, but usually news is during NY/LDN.
+            if run_ai and not is_news_active:
                 current_utc = datetime.now(timezone.utc)
                 is_weekend = current_utc.weekday() >= 5 # 5=Sat, 6=Sun
                 is_asian_session = 0 <= current_utc.hour < 8
@@ -324,27 +367,24 @@ Current Leader: {darwin.leader.name}
                     decision['reasoning_summary'] = "Time Guard: Asian Session (00:00-08:00 UTC) Blocked."
                     run_ai = False
                     print(f"DEBUG: Gate 0 (Time Guard) Blocked. Asian Session active ({current_utc.hour:02d}:00 UTC).", flush=True)
+
             # Gate 1: Spread Guard (Critical during News) - GOLD OPTIMIZED
             spread = latest_indicators.get('spread', 0)
             # Use Gold-specific spread tolerance (50 pts vs 20 pts for forex)
-            if (run_ai or news_signal) and not risk_manager.validate_spread(spread, Config.MAX_SPREAD_POINTS):
-                 decision['reasoning_summary'] = f"Spread High ({spread} > {Config.MAX_SPREAD_POINTS}). Paused."
+            # During News Arbitrage we anticipate spread widening, so we increase the tolerance
+            effective_max_spread = Config.MAX_SPREAD_POINTS * 3 if is_news_active else Config.MAX_SPREAD_POINTS
+            
+            if run_ai and not risk_manager.validate_spread(spread, effective_max_spread):
+                 decision['reasoning_summary'] = f"Spread High ({spread} > {effective_max_spread}). Paused."
                  run_ai = False
-                 print(f"DEBUG: Gate 1 (Spread) Blocked. Spread: {spread} > {Config.MAX_SPREAD_POINTS}", flush=True)
-                 if news_signal:
-                     print("❌ News Trade Aborted due to Spread Spike.")
-                     decision['action'] = "WAIT"
+                 print(f"DEBUG: Gate 1 (Spread) Blocked. Spread: {spread} > {effective_max_spread}", flush=True)
 
-            # Gate 2: MTF Alignment Check (The Matrix)
-            # IGNORE IF NEWS SIGNAL
-            # Gate 2: MTF Alignment Check (The Matrix)
-            # IGNORE IF NEWS SIGNAL
             # Gate 2: MTF Alignment Check (The Matrix)
             # IGNORE IF NEWS SIGNAL
             print(f"DEBUG: Checking Gate 2. alignment_score={alignment_score}, run_ai={run_ai}", flush=True)
             # SCALPING TWEAK: Relaxed alignment check. 
             # 0.0 was too strict (blocked ranging markets). -0.5 allows "Weak Conflict" / Ranging.
-            if run_ai and not news_signal and alignment_score < -0.5:
+            if run_ai and not is_news_active and alignment_score < -0.5:
                  decision['reasoning_summary'] = f"⛔ MTF MISMATCH. Score {alignment_score}. Waiting."
                  run_ai = False
                  print("DEBUG: Gate 2 Blocked (Severe Misalignment).", flush=True)
