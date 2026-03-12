@@ -134,7 +134,7 @@ class ExecutionEngine:
         res = mt5.order_send(request)
         return res.retcode == mt5.TRADE_RETCODE_DONE
 
-    def monitor_open_trades(self, current_price: float, atr: float = 0.0, fractal_levels: dict = None) -> dict:
+    def monitor_open_trades(self, current_price: float, atr: float = 0.0, fractal_levels: dict = None, gamma_state: dict = None) -> dict:
         """
         Monitors ALL open trades.
         Returns: {'count': int, 'trades': list, 'closed_pnl': float, 'managed_count': int}
@@ -181,7 +181,7 @@ class ExecutionEngine:
             if not is_closed and mode == "LIVE":
                 # Apply Smart Trailing (updates trade dict in place)
                 # Uses ATR for validation but purely Structural (Fractal) targets if available
-                self.apply_trailing_stop(trade, current_price, atr, fractal_levels)
+                self.apply_trailing_stop(trade, current_price, atr, fractal_levels, gamma_state=gamma_state)
                 managed_count += 1 
 
             # --- FINALIZATION ---
