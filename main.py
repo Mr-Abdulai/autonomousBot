@@ -19,6 +19,8 @@ from app.bif_brain import BIFBrain
 from app.darwin_engine import DarwinEngine
 from app.chronos import ChronosWeaver, ChronosArena
 from app.oracle import Oracle
+from app.macro_sensor import MacroSensor # INSTITUTIONAL UPGRADE 1
+from app.ml_engine import MLEngine # INSTITUTIONAL UPGRADE 3
 
 def main():
     print("=== Hybrid Neuro-Symbolic Trading System Starting ===")
@@ -32,6 +34,10 @@ def main():
         
     # 2. Initialize Components
     sensor = MarketSensor(symbol=Config.SYMBOL, timeframe=Config.TIMEFRAME)
+    macro_sensor = MacroSensor() # Initialize MacroSensor
+    ml_engine = MLEngine() # Initialize ML Engine
+    from app.gamma_walls import GammaWallDetector
+    gamma_detector = GammaWallDetector(danger_zone_dollars=5.0) # INSTITUTIONAL UPGRADE 4
     ai_strategist = GroqStrategist(model="llama-3.3-70b-versatile")
     risk_manager = IronCladRiskManager()
     executor = ExecutionEngine()
@@ -71,9 +77,38 @@ def main():
         "daily_pnl": 0.0,
         "total_pnl": 0.0
     }
+    # INSTITUTIONAL UPGRADE 5: Asynchronous Tick-Level Execution
+    last_strategy_run = datetime.min
+    strategy_refresh_interval = timedelta(seconds=Config.SLEEP_SECONDS)
     
     while True:
         try:
+            now = datetime.now()
+            
+            # --- FAST PATH: TICK-LEVEL TRADE MANAGEMENT (1s Interval) ---
+            if not Config.BACKTEST_MODE and mt5.initialize():
+                tick = mt5.symbol_info_tick(Config.SYMBOL)
+                if tick and 'latest_indicators' in locals() and 'fractal_levels' in locals():
+                    tick_price = tick.bid
+                    tick_atr = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
+                    tick_gamma = locals().get('gamma_state', None)
+                    
+                    # Manage open trades instantly upon price change
+                    monitor_result = executor.monitor_open_trades(tick_price, atr=tick_atr, fractal_levels=fractal_levels, gamma_state=tick_gamma)
+                    active_trades = monitor_result['trades']
+                    
+                    if monitor_result.get('closed_pnl', 0.0) > 0:
+                        print(f"💰 TICK-LEVEL PROFIT LOCKED (${monitor_result['closed_pnl']:.2f}). Triggering Momentum Boost.")
+                        risk_manager.register_win()
+            
+            # --- THROTTLE SLOW PATH: STRATEGY ENGINE ---
+            if now - last_strategy_run < strategy_refresh_interval:
+                time.sleep(1) # Free CPU, tick 1s
+                continue
+                
+            last_strategy_run = now
+            print(f"\n[{now.strftime('%H:%M:%S')}] 🔄 Synchronizing Deep Matrix Strategy Engine...")
+            
             # Refresh Account Info (Partial Update)
 
             if not Config.BACKTEST_MODE and mt5.initialize():
@@ -162,9 +197,19 @@ def main():
             mtf_data = sensor.fetch_mtf_data()
             mtf_analysis = brain.analyze_mtf_regime(mtf_data)
             
-            # INJECT Regime for Darwin 2.0 (Smart Scoring)
+            # Phase 90: Macro Intermarket Alignment (DXY)
+            macro_divergence = macro_sensor.get_macro_divergence(df)
+            
+            # Phase 91: Machine Learning Delta Engine (Institutional Upgrade 3)
+            ml_prediction = ml_engine.predict_delta(df_deep)
+            
+            # Phase 92: Synthetic Options Gamma Walls (Institutional Upgrade 4)
+            gamma_state = gamma_detector.analyze(current_price)
+            
+            # INJECT Context for Darwin 2.0 (Smart Scoring & Signals)
             mtf_data['analysis'] = mtf_analysis['mtf_stats']
             mtf_data['analysis']['trend'] = mtf_analysis['trend'] # FIX: Inject Trend for Boost
+            mtf_data['macro'] = macro_divergence # Pass Macro Data to Swarm
             
             bif_stats = mtf_analysis['mtf_stats']['BASE']
             alignment_score = mtf_analysis['alignment_score']
@@ -222,14 +267,21 @@ def main():
                 supertrend = TALib.calculate_supertrend(df, period=10, multiplier=3.0)
                 rvi = TALib.calculate_rvi(df, period=14)
                 
+                # INSTITUTIONAL UPGRADE 2: Volume Profile (VPVR)
+                vpvr = TALib.calculate_volume_profile(df, bins=50)
+                
                 # Store for later use in decision enhancement
                 advanced_indicators = {
                     'vwap': vwap,
                     'supertrend': supertrend,
-                    'rvi': rvi
+                    'rvi': rvi,
+                    'vpvr': vpvr
                 }
                 
                 print(f"🔍 GOLD Advanced Indicators: VWAP={vwap:.5f}, SuperTrend={supertrend['trend']} at {supertrend['level']:.5f}, RVI={rvi:.2f}")
+                print(f"📊 Volume Profile (VPVR): POC={vpvr['poc']:.5f}, VAH={vpvr['vah']:.5f}, VAL={vpvr['val']:.5f}")
+                if gamma_state['near_wall']:
+                    print(f"🧱 GAMMA WARNING: Pushing into heavily defended {gamma_state['wall_type']} Institutional Options Wall at {gamma_state['wall_price']} (${gamma_state['distance']:.2f} away). Tightening Trail.")
             
             except Exception as e:
                 # Graceful degradation: Use neutral defaults
@@ -237,7 +289,8 @@ def main():
                 advanced_indicators = {
                     'vwap': current_price,  # Neutral (current price)
                     'supertrend': {'trend': 'NEUTRAL', 'level': current_price, 'signal': 0},
-                    'rvi': 0.0  # Neutral momentum
+                    'rvi': 0.0,  # Neutral momentum
+                    'vpvr': {'poc': current_price, 'vah': current_price, 'val': current_price, 'hvns': []}
                 }
             
             market_summary = f"{market_summary}\n\n📊 REGIME: {regime_tag}\n🧠 BIF Stats (BASE): Hurst={bif_stats['hurst']:.2f}, Entropy={bif_stats['entropy']:.2f}, Alignment={alignment_score:.2f}"
@@ -249,6 +302,19 @@ Hurst Exponent: {bif_stats['hurst']} (Memory)
 Shannon Entropy: {bif_stats['entropy']} (Signal Quality)
 MTF Alignment Score: {alignment_score} (H1/H4 Confirmation)
 
+=== ML DELTA ENGINE (Predictive Alpha) ===
+Active/Trained: {ml_prediction.get('active', False)}
+Probability UP: {ml_prediction.get('bullish_prob', 0.5):.2%}
+Probability DOWN: {ml_prediction.get('bearish_prob', 0.5):.2%}
+
+=== GAMMA WALL DEFENSE ===
+Proximity: {'DANGER' if gamma_state['near_wall'] else 'CLEAR'}
+Nearest Strike: {gamma_state['wall_price']} ({gamma_state['distance']:.2f} distance)
+
+=== VOLUME PROFILE (ORDER FLOW) ===
+Point of Control (POC): {advanced_indicators['vpvr']['poc']:.5f}
+Value Area: {advanced_indicators['vpvr']['val']:.5f} - {advanced_indicators['vpvr']['vah']:.5f}
+
 === DARWINIAN EVOLUTION (STRATEGY SELECTOR) ===
 {leader_stats}
 Current Leader: {darwin.leader.name}
@@ -256,16 +322,9 @@ Current Leader: {darwin.leader.name}
             market_summary += bif_context
             print(f"🧠 BIF Matrix: Score {alignment_score} | Leader: {darwin.leader.name}")
 
-            # B. Check for active trades & Manage them
-            atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
-            monitor_result = executor.monitor_open_trades(current_price, atr=atr_val, fractal_levels=fractal_levels)
-            active_trades = monitor_result['trades'] 
-            
-            # PHASE 68: MOMENTUM BOOST
-            # If we just closed a trade in profit, trigger the Hot Hand mechanic
-            if monitor_result.get('closed_pnl', 0.0) > 0:
-                print(f"💰 PROFIT LOCKED (${monitor_result['closed_pnl']:.2f}). Triggering Momentum Boost.")
-                risk_manager.register_win()
+            # B. Active Trades Sync (Management is now handled asynchronously on the Tick-Level at loop start)
+            # We just retrieve the latest active_trades state for Pyramiding & Execution validation
+            active_trades = executor.load_state()
                 
             # --- ULTIMATE GOLD STRATEGY 3: THE PYRAMIDING PROTOCOL ---
             # Max Pyramid instances allowed at once (so we don't scale infinitely)
@@ -279,42 +338,49 @@ Current Leader: {darwin.leader.name}
                     p_action = pyramid_check['action_to_take']
                     base_ticket = base_trade['ticket']
                     
-                    print(f"📈 PYRAMID PROTOCOL ACTIVATED: Trade {base_ticket} is deep in profit & Risk-Free. Scaling in with {p_action}!")
+                    # --- INSTITUTIONAL UPGRADE: Margin Blindness Fix ---
+                    free_margin = account_info.get('margin_free', 10000)
+                    equity = account_info.get('equity', 10000)
                     
-                    # Logic: We open a new trade with HALF the size of the base trade to keep risk contained
-                    base_volume = base_trade.get('volume', 0.01)
-                    p_volume = max(round(base_volume * 0.5, 2), 0.01)
-                    
-                    # Target the same Take Profit as the base trade
-                    p_tp = base_trade.get('tp')
-                    
-                    # Tighter SL for the pyramid trade (below recent structure)
-                    # We'll use a standard ATR calculation for safety
-                    p_sl_mult = 1.0 # Tighter than normal
-                    if p_action == "BUY":
-                        p_sl = current_price - (atr_val * p_sl_mult)
+                    if free_margin < (equity * 0.15) and not Config.BACKTEST_MODE:
+                        print(f"⚠️ Pyramid Aborted: Insufficient Free Margin ({free_margin:.2f} / {equity:.2f})")
                     else:
-                        p_sl = current_price + (atr_val * p_sl_mult)
+                        print(f"📈 PYRAMID PROTOCOL ACTIVATED: Trade {base_ticket} is deep in profit & Risk-Free. Scaling in with {p_action}!")
                         
-                    # Execute the Pyramid Trade
-                    db_pyramid = executor.execute_trade(p_action, p_sl, p_tp, p_volume)
-                    
-                    if db_pyramid:
-                        # Mark the base trade so we don't pyramid off it again
-                        executor._mark_trade_pyramided(base_ticket)
-                        # Mark the new trade as a pyramid instance
-                        db_pyramid['is_pyramid'] = True 
-                        # Save the updated tags to state
-                        executor.save_state(executor.load_state() + [db_pyramid]) # Need to merge correctly, but executor already saved db_pyramid. So just re-save.
+                        # Logic: We open a new trade with HALF the size of the base trade to keep risk contained
+                        base_volume = base_trade.get('volume', 0.01)
+                        p_volume = max(round(base_volume * 0.5, 2), 0.01)
                         
-                        # Correct persistence update:
-                        current_state = executor.load_state()
-                        for t in current_state:
-                            if t['ticket'] == base_ticket:
-                                t['pyramided'] = True
-                            if t['ticket'] == db_pyramid['ticket']:
-                                t['is_pyramid'] = True
-                        executor.save_state(current_state)
+                        # Target the same Take Profit as the base trade
+                        p_tp = base_trade.get('tp')
+                        
+                        # Tighter SL for the pyramid trade (below recent structure)
+                        # We'll use a standard ATR calculation for safety
+                        p_sl_mult = 1.0 # Tighter than normal
+                        if p_action == "BUY":
+                            p_sl = current_price - (atr_val * p_sl_mult)
+                        else:
+                            p_sl = current_price + (atr_val * p_sl_mult)
+                            
+                        # Execute the Pyramid Trade
+                        db_pyramid = executor.execute_trade(p_action, p_sl, p_tp, p_volume)
+                        
+                        if db_pyramid:
+                            # Mark the base trade so we don't pyramid off it again
+                            executor._mark_trade_pyramided(base_ticket)
+                            # Mark the new trade as a pyramid instance
+                            db_pyramid['is_pyramid'] = True 
+                            # Save the updated tags to state
+                            executor.save_state(executor.load_state() + [db_pyramid]) # Need to merge correctly, but executor already saved db_pyramid. So just re-save.
+                            
+                            # Correct persistence update:
+                            current_state = executor.load_state()
+                            for t in current_state:
+                                if t['ticket'] == base_ticket:
+                                    t['pyramided'] = True
+                                if t['ticket'] == db_pyramid['ticket']:
+                                    t['is_pyramid'] = True
+                            executor.save_state(current_state)
 
             
             # C. Determine System State & Decision
@@ -504,6 +570,17 @@ Current Leader: {darwin.leader.name}
                 # Preserve Chronos result if it passed
                 if 'chronos_result' in decision:
                     analyzed_decision['chronos_result'] = decision['chronos_result']
+
+                # PHASE 92: GAMMA WALL SEVERANCE (Institutional Upgrade 4)
+                # Veto breakout entries that are smashing directly into institutional defense strikes.
+                if analyzed_decision['action'] == 'BUY' and gamma_state.get('block_buy', False):
+                    print(f"🧱 GAMMA WALL REJECTION: Blocked BUY into {gamma_state['wall_price']} ceiling.")
+                    analyzed_decision['action'] = 'HOLD'
+                    analyzed_decision['reasoning_summary'] = 'Blocked by Gamma Wall ceiling'
+                elif analyzed_decision['action'] == 'SELL' and gamma_state.get('block_sell', False):
+                    print(f"🧱 GAMMA WALL REJECTION: Blocked SELL into {gamma_state['wall_price']} floor.")
+                    analyzed_decision['action'] = 'HOLD'
+                    analyzed_decision['reasoning_summary'] = 'Blocked by Gamma Wall floor'
 
                 # GOLD ENTRY CONFIRMATIONS (Boost/Reduce Confidence)
                 if analyzed_decision['action'] in ['BUY', 'SELL']:
@@ -756,8 +833,9 @@ Current Leader: {darwin.leader.name}
                  # Reset flag after 1 AM
                  locals()['evolved_today'] = False
 
-            active_sleep = 5 if active_trades else 60
-            time.sleep(active_sleep)
+            # The Asynchronous Tick-Level loop already rests for 1 second at the top.
+            # No trailing sleep required; this thread is now unchained.
+            pass
 
         except KeyboardInterrupt:
             print("Shutdown requested.")

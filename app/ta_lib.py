@@ -253,7 +253,84 @@ class TALib:
         
         rvi = num / denom
         
-        # Normalize to -1 to +1 range
         rvi = rvi.clip(-1, 1)
         
         return rvi.iloc[-1] if not pd.isna(rvi.iloc[-1]) else 0.0
+
+    @staticmethod
+    def calculate_volume_profile(df: pd.DataFrame, bins: int = 50) -> dict:
+        """
+        Calculates the Volume Profile (VPVR) to identify the Point of Control (POC)
+        and High Volume Nodes (HVNs) where institutional liquidity rests.
+        """
+        if df is None or len(df) < 50:
+            return {'poc': 0.0, 'vah': 0.0, 'val': 0.0, 'hvns': []}
+
+        volume_col = 'tick_volume' if 'tick_volume' in df.columns else 'volume'
+        if volume_col not in df.columns:
+            return {'poc': df['close'].iloc[-1], 'vah': 0.0, 'val': 0.0, 'hvns': []}
+
+        min_price = df['low'].min()
+        max_price = df['high'].max()
+        
+        if min_price == max_price:
+            return {'poc': min_price, 'vah': min_price, 'val': min_price, 'hvns': []}
+
+        bin_size = (max_price - min_price) / bins
+        volume_profile = np.zeros(bins)
+        prices = np.linspace(min_price, max_price, bins)
+
+        for _, row in df.iterrows():
+            low = row['low']
+            high = row['high']
+            vol = row[volume_col]
+            
+            start_bin = int((low - min_price) / bin_size)
+            end_bin = int((high - min_price) / bin_size)
+            
+            start_bin = max(0, min(start_bin, bins - 1))
+            end_bin = max(0, min(end_bin, bins - 1))
+            
+            if start_bin == end_bin:
+                volume_profile[start_bin] += vol
+            else:
+                vol_per_bin = vol / (end_bin - start_bin + 1)
+                for i in range(start_bin, end_bin + 1):
+                    volume_profile[i] += vol_per_bin
+
+        poc_index = np.argmax(volume_profile)
+        poc = prices[poc_index]
+        
+        total_volume = np.sum(volume_profile)
+        va_volume_target = total_volume * 0.70
+        
+        va_volume = volume_profile[poc_index]
+        lower_index = poc_index
+        upper_index = poc_index
+        
+        while va_volume < va_volume_target and (lower_index > 0 or upper_index < bins - 1):
+            lower_vol = volume_profile[lower_index - 1] if lower_index > 0 else -1
+            upper_vol = volume_profile[upper_index + 1] if upper_index < bins - 1 else -1
+            
+            if lower_vol > upper_vol:
+                lower_index -= 1
+                va_volume += volume_profile[lower_index]
+            else:
+                upper_index += 1
+                va_volume += volume_profile[upper_index]
+                
+        val = prices[lower_index]
+        vah = prices[upper_index]
+        
+        hvns = []
+        for i in range(1, bins - 1):
+            if volume_profile[i] > volume_profile[i-1] and volume_profile[i] > volume_profile[i+1]:
+                if volume_profile[i] > (total_volume / bins) * 1.5:
+                    hvns.append(prices[i])
+
+        return {
+            'poc': poc,
+            'vah': vah,
+            'val': val,
+            'hvns': hvns
+        }

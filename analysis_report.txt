@@ -1,0 +1,27 @@
+Columns: ['Timestamp', 'Symbol', 'Action', 'Confidence', 'Reasoning', 'Entry', 'SL', 'TP', 'Size', 'PnL']
+
+--- Summary (Since Feb 17, 2026) ---
+Total Trades: 0
+Wins: 0, Losses: 0
+Win Rate: 0.00%
+Total PnL: $0.00
+
+--- By Action (Action) ---
+        Trades  WinRate  TotalPnL
+Action                           
+BUY         38      0.0       0.0
+HOLD         3      0.0       0.0
+SELL        10      0.0       0.0
+
+--- Worst 10 Trades ---
+          Timestamp  Symbol Action  PnL
+2026-02-17 00:54:36 XAUUSDm   HOLD  0.0
+2026-02-18 20:45:41 XAUUSDm    BUY  0.0
+2026-02-18 20:45:41 XAUUSDm    BUY  0.0
+2026-02-18 20:47:48 XAUUSDm    BUY  0.0
+2026-02-18 20:47:48 XAUUSDm    BUY  0.0
+2026-02-18 20:48:11 XAUUSDm    BUY  0.0
+2026-02-18 20:48:11 XAUUSDm    BUY  0.0
+2026-02-20 01:13:45 XAUUSDm   SELL  0.0
+2026-02-20 01:13:45 XAUUSDm   SELL  0.0
+2026-02-20 01:14:46 XAUUSDm   SELL  0.0

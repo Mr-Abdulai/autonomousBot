@@ -1,0 +1,26 @@
+
+===== Inspecting trade_log.csv =====
+Total Rows: 14676
+Columns: ['Timestamp', 'Symbol', 'Action', 'Confidence', 'Reasoning', 'Entry', 'SL', 'TP', 'Size', 'PnL']
+Date Range: 2026-01-26 11:03:22 to 2026-02-06 02:21:04
+
+Top 10 Actions:
+Action
+WAIT    13078
+HOLD     1512
+SELL       48
+BUY        38
+PnL Not Null: 14676, PnL != 0.0: 0
+
+===== Inspecting trade_log_298327291.csv =====
+Total Rows: 46842
+Columns: ['Timestamp', 'Symbol', 'Action', 'Confidence', 'Reasoning', 'Entry', 'SL', 'TP', 'Size', 'PnL']
+Date Range: 2026-02-06 02:22:25 to 2026-03-10 00:59:36
+
+Top 10 Actions:
+Action
+WAIT    46213
+BUY       498
+HOLD      119
+SELL       12
+PnL Not Null: 46842, PnL != 0.0: 0

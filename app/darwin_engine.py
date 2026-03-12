@@ -554,6 +554,45 @@ class NewsArbitrage(ShadowStrategy):
     def clone(self, new_params: dict = None) -> 'NewsArbitrage':
         return NewsArbitrage(self.name, self.direction)
 
+class StatArb_DXY(ShadowStrategy):
+    """
+    ULTIMATE GOLD STRATEGY 3: Statistical Arbitrage & Intermarket Cointegration
+    Logic: Triggers when Gold and the US Dollar Index (DXY) are structurally mispriced.
+    Gold and DXY should be inversely correlated. If they move in the same direction,
+    this strategy plays the fundamental mean reversion.
+    """
+    def _generate_raw_signal(self, df, indicators, mtf_data):
+        macro = mtf_data.get('macro', {})
+        if not macro.get('dxy_active', False):
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'DXY Data Unavailable'}
+            
+        div_score = macro.get('divergence_score', 0.0)
+        current_price = df.iloc[-1]['close']
+        atr = indicators.get('atr', indicators.get('ATR_14', 2.0))
+        
+        # BUY LOGIC: Gold is anomalously weak (-2.0 Z-Score)
+        if div_score <= -2.0 and self.direction in ['BOTH', 'LONG']:
+            sl = current_price - (atr * 1.5)
+            tp = current_price + (atr * 3.0)
+            return {'action': 'BUY', 'confidence': min(abs(div_score) * 0.3, 0.9), 'sl': sl, 'tp': tp, 'reason': f"StatArb DXY Z-Score ({div_score:.2f})"}
+            
+        # SELL LOGIC: Gold is anomalously strong (+2.0 Z-Score)
+        if div_score >= 2.0 and self.direction in ['BOTH', 'SHORT']:
+            
+            # --- THE THIRD VARIABLE RISK (PANIC GUARD) ---
+            # Do not short a breakout if the entire market is panicking (Safe Haven Convergence).
+            if macro.get('vix_spike', False):
+                return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'VETO: Safe Haven Convergence (VIX Proxy Spike)'}
+                
+            sl = current_price + (atr * 1.5)
+            tp = current_price - (atr * 3.0)
+            return {'action': 'SELL', 'confidence': min(div_score * 0.3, 0.9), 'sl': sl, 'tp': tp, 'reason': f"StatArb DXY Z-Score ({div_score:.2f})"}
+            
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Macro Cointegration Stable'}
+
+    def clone(self, new_params: dict = None) -> 'StatArb_DXY':
+        return StatArb_DXY(self.name, self.direction)
+
 class DarwinEngine:
     def __init__(self):
         self.strategies = []
@@ -613,6 +652,11 @@ class DarwinEngine:
         self.strategies.append(NewsArbitrage("NewsArbitrage_SHORT", direction="SHORT"))
         self.strategies.append(NewsArbitrage("NewsArbitrage_BOTH", direction="BOTH"))
         
+        # 9. ULTIMATE GOLD STRATEGY: Statistical Arbitrage (Macro Cointegration)
+        self.strategies.append(StatArb_DXY("StatArb_DXY_LONG", direction="LONG"))
+        self.strategies.append(StatArb_DXY("StatArb_DXY_SHORT", direction="SHORT"))
+        self.strategies.append(StatArb_DXY("StatArb_DXY_BOTH", direction="BOTH"))
+        
         print(f"🐝 Darwin Swarm Initialized: {len(self.strategies)} Active Strategies.")
         
         # LOAD BRAIN MEMORY
@@ -632,7 +676,8 @@ class DarwinEngine:
             'Sniper': Sniper,
             'TrendPullback': TrendPullback,
             'LiquiditySweeper': LiquiditySweeper,
-            'NewsArbitrage': NewsArbitrage
+            'NewsArbitrage': NewsArbitrage,
+            'StatArb_DXY': StatArb_DXY
         }
         return mapping.get(class_name)
         
@@ -714,6 +759,8 @@ class DarwinEngine:
                         (Sniper,        "Sniper_Elite",          "BOTH",  {}),
                         (TrendPullback, "TrendPullback_LONG",    "LONG",  {}),
                         (TrendPullback, "TrendPullback_SHORT",   "SHORT", {}),
+                        (StatArb_DXY,   "StatArb_DXY_LONG",      "LONG",  {}),
+                        (StatArb_DXY,   "StatArb_DXY_SHORT",     "SHORT", {}),
                     ]
                     
                     injected = 0

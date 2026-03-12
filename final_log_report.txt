@@ -1,0 +1,29 @@
+--- Analysis Report: Bot Performance ---
+
+Total Executed Signals in log: 510
+
+Action Breakdown:
+Action
+BUY     498
+SELL     12
+
+Top Triggering Strategies:
+Trigger_Strategy
+MACD_Cross_LONG_FAST     454
+RSI_Matrix_LONG_33_90     26
+3SD                       16
+Unknown                    8
+4SD                        4
+5SD                        2
+
+--- logs.csv System Health ---
+Total Log Lines: 7863
+Error Lines: 3
+Warning Lines: 0
+Max Trades Hit Lines: 8
+
+Top 5 Recent Errors:
+⚠️ SL Update Failed (MT5 Error or connection).
+⚠️ SL Update Failed (MT5 Error or connection).
+⚠️ SL Update Failed (MT5 Error or connection).
+------------------------------------------

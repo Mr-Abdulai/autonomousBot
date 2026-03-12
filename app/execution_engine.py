@@ -200,7 +200,7 @@ class ExecutionEngine:
             'managed_count': managed_count
         }
 
-    def apply_trailing_stop(self, trade, current_price, atr, fractal_levels=None):
+    def apply_trailing_stop(self, trade, current_price, atr, fractal_levels=None, gamma_state=None):
         """
         Dynamically moves Stop Loss based on profit milestones.
         Updates 'trade' dictionary in-place if successful.
@@ -232,12 +232,18 @@ class ExecutionEngine:
             f_res = fractal_levels.get('resistance', 0.0) if fractal_levels else 0.0
             f_sup = fractal_levels.get('support', 0.0) if fractal_levels else 0.0
             
+            # PHASE 92: GAMMA WALL DEFENSE 
+            # If we are near a Gamma Wall, Trailing stops must squeeze tighter!
+            # Default buffer is (atr * 0.1). Gamma wall squashes it by 60%.
+            gamma_ts_multiplier = gamma_state.get('ts_multiplier', 1.0) if gamma_state else 1.0
+            ts_buffer = (atr * 0.1) * gamma_ts_multiplier
+            
             if action == "BUY":
                 profit = current_price - entry_price
                 
                 # Trigger 1: Break Even (Profit > 1.0 * Risk) - Standard Trail
                 if profit > (1.0 * risk) and current_sl < entry_price:
-                    new_sl = entry_price + (atr * 0.1) 
+                    new_sl = entry_price + ts_buffer 
                     modification_reason = "Break-Even (+1R)"
                 
                 # Trigger 2: Fractal Trailing (Profit > 2.0 * Risk)
@@ -245,7 +251,7 @@ class ExecutionEngine:
                     # We want to trail to the LAST SUPPORT FRACTAL
                     # Check if valid support fractal exists and is ABOVE current SL
                     if f_sup > current_sl and f_sup < current_price:
-                         new_sl = f_sup - (atr * 0.1) # Buffer below support
+                         new_sl = f_sup - ts_buffer # Buffer below support
                          modification_reason = "Structure Trail (Fractal)"
 
             elif action == "SELL":
@@ -253,14 +259,14 @@ class ExecutionEngine:
                 
                 # Trigger 1: Break Even
                 if profit > (1.0 * risk) and current_sl > entry_price:
-                    new_sl = entry_price - (atr * 0.1)
+                    new_sl = entry_price - ts_buffer
                     modification_reason = "Break-Even (+1R)"
                 
                 # Trigger 2: Fractal Trailing
                 elif profit > (2.0 * risk):
                      # Trail to LAST RESISTANCE FRACTAL
                      if f_res > 0 and f_res < current_sl and f_res > current_price:
-                         new_sl = f_res + (atr * 0.1) # Buffer above resistance
+                         new_sl = f_res + ts_buffer # Buffer above resistance
                          modification_reason = "Structure Trail (Fractal)"
 
             # Execute Modification
@@ -434,6 +440,32 @@ class ExecutionEngine:
             res = mt5.order_send(request)
             if res.retcode == mt5.TRADE_RETCODE_DONE:
                 print(f"✅ PARTIAL CLOSE: {close_volume} lots of {ticket} closed (${res.price:.5f})")
+                
+                # BUG FIX: MT5 Ticket Mutation (Hedging Mode generates new ticket)
+                import time
+                time.sleep(0.1) # Brief pause for MT5 to execute position shift
+                
+                updated_positions = mt5.positions_get(symbol=pos.symbol)
+                new_ticket_id = ticket
+                if updated_positions:
+                    # Look for old ticket still existing (Netting Mode)
+                    for p in updated_positions:
+                        if str(p.ticket) == str(ticket):
+                            new_ticket_id = ticket
+                            break
+                        # Look for replacement ticket via matching Magic + Remaining Volume (Hedging Mode)
+                        elif p.magic == pos.magic and abs(p.volume - (pos.volume - close_volume)) < 0.001:
+                            new_ticket_id = p.ticket
+                            break
+                            
+                if str(new_ticket_id) != str(ticket):
+                    print(f"🔄 Ticket Mutated on Partial Close: {ticket} -> {new_ticket_id}")
+                    states = self.load_state()
+                    for t in states:
+                        if str(t['ticket']) == str(ticket):
+                            t['ticket'] = str(new_ticket_id)
+                    self.save_state(states)
+                    
                 return True
             else:
                 print(f"⚠️ Failed to Partial Close {ticket}: {res.comment} (Code: {res.retcode})")
