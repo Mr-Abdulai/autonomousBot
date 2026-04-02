@@ -1,0 +1,8 @@
+--- TOP 5 BUYS ---
+[2026-02-09 15:37:46] BUY | Conf: 0.82 | Entry: 0.0 | SL: 0.0 | TP: 0.0 | Size: 0.0 | Reason: REGIME: TRENDING. STRUCTURE: NO ORDER BLOCKS. CONFIRMATION: MACD IS BULLISH. DECISION: JURY RECOMMENDS BUY WITH 0.55 CONFIDENCE. | GOLD Confirmations: VWAP Support (Institutions Buying), SuperTrend UP
+[2026-02-09 15:37:46] BUY | Conf: 0.82 | Entry: 5049.712 | SL: 5011.4176335775965 | TP: 5126.759732844806 | Size: 0.01 | Reason: REGIME: TRENDING. STRUCTURE: NO ORDER BLOCKS. CONFIRMATION: MACD IS BULLISH. DECISION: JURY RECOMMENDS BUY WITH 0.55 CONFIDENCE. | GOLD Confirmations: VWAP Support (Institutions Buying), SuperTrend UP
+[2026-02-09 15:40:08] BUY | Conf: 0.95 | Entry: 0.0 | SL: 0.0 | TP: 0.0 | Size: 0.0 | Reason: REGIME: TRENDING. STRUCTURE: No Active Order Blocks. CONFIRMATION: RSI=66.7, MACD=7.12179. DECISION: Jury recommends BUY with 0.72 confidence, Chronos Win Rate: 0.56, and Gate 4 Passed. | GOLD Confirmations: VWAP Support (Institutions Buying), SuperTrend UP
+[2026-02-09 15:40:08] BUY | Conf: 0.95 | Entry: 5052.767 | SL: 5013.716633577596 | TP: 5129.058732844806 | Size: 0.01 | Reason: REGIME: TRENDING. STRUCTURE: No Active Order Blocks. CONFIRMATION: RSI=66.7, MACD=7.12179. DECISION: Jury recommends BUY with 0.72 confidence, Chronos Win Rate: 0.56, and Gate 4 Passed. | GOLD Confirmations: VWAP Support (Institutions Buying), SuperTrend UP
+[2026-02-09 15:40:38] BUY | Conf: 0.95 | Entry: 0.0 | SL: 0.0 | TP: 0.0 | Size: 0.0 | Reason: REGIME: TRENDING. STRUCTURE: No Active Order Blocks. CONFIRMATION: RSI=65.8, MACD=6.89667. DECISION: Jury recommends BUY with 0.72 confidence, Chronos Win Rate: 0.56, and Gate 4 Passed. | GOLD Confirmations: VWAP Support (Institutions Buying), SuperTrend UP
+
+Total non-zero PnL: 0

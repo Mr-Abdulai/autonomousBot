@@ -36,7 +36,7 @@ class ExecutionEngine:
         if os.path.exists(self.trades_file):
             os.remove(self.trades_file)
 
-    def execute_trade(self, action: str, sl_price: float, tp_price: float, risk_units: float) -> str:
+    def execute_trade(self, action: str, sl_price: float, tp_price: float, risk_units: float, current_price: float) -> dict:
         """Executes a NEW trade and appends to the list."""
         
         # 1. Logic to calculate volume (same as before)
@@ -59,7 +59,7 @@ class ExecutionEngine:
                 "ticket": mock_ticket,
                 "symbol": self.symbol,
                 "action": action,
-                "open_price": sl_price + (sl_price*0.01 if action=="SELL" else -sl_price*0.01),
+                "open_price": current_price,
                 "sl": sl_price,
                 "tp": tp_price,
                 "volume": volume_lots,

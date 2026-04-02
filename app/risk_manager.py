@@ -280,13 +280,11 @@ class IronCladRiskManager:
                 return 0.01
             
             units = risk_amount / risk_per_unit
-            lots = units / 100000  # Convert to MT5 lots
-            lots = max(0.01, round(lots, 2))  # Min 0.01, round to 2 decimals
             
             print(f"📊 Kelly Criterion: WR={win_rate:.1%}, B={b:.2f}, Kelly={kelly_fraction:.3f}, Half-Kelly={safe_kelly:.3f}")
-            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {lots:.2f} lots (vs {self.risk_per_trade:.2%} standard)")
+            print(f"💰 Kelly Position: {kelly_risk_pct:.2%} risk = {units:.2f} units (vs {self.risk_per_trade:.2%} standard)")
             
-            return lots
+            return units
             
         except Exception as e:
             print(f"Kelly Calculation Error: {e}, falling back to standard sizing")

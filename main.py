@@ -667,15 +667,6 @@ Current Leader: {darwin.leader.name}
             dashboard.update_system_state(account_info, active_trades, latest_indicators, decision, bif_stats=bif_stats, swarm_state=swarm_state, oracle_brief=brief, chronos_stats=sim_result)
             dashboard.update_market_history(df)
             
-            # FORCE LOG DECISION for Cortex (CSV)
-            if True: # DEBUG: FORCE LOGGING ALL STATES TO DIAGNOSE SILENT FAILURES
-                print(f"DEBUG: Logging decision: {decision['action']}", flush=True)
-                try:
-                    dashboard.log_decision(decision)
-                    print("DEBUG: Logged to CSV.", flush=True)
-                except Exception as e:
-                    print(f"DEBUG: Failed to log decision: {e}", flush=True)
-                
             # E. Execution Logic
             execution_info = None  # FIX: Reset for loop iteration
             if decision['action'] in ["BUY", "SELL"]:
@@ -793,7 +784,7 @@ Current Leader: {darwin.leader.name}
 
                 execution_info = None
                 if units > 0:
-                        execution_info = executor.execute_trade(decision['action'], sl_price, tp_price, units)
+                        execution_info = executor.execute_trade(decision['action'], sl_price, tp_price, units, current_price)
                 
                 # Log decision with execution info (if any)
                 # Ensure we log even if no trade was taken (HOLD/WAIT), but if taken, include details
