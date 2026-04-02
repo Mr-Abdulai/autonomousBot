@@ -81,6 +81,9 @@ def main():
     last_strategy_run = datetime.min
     strategy_refresh_interval = timedelta(seconds=60) # Execute Deep Matrix every 60 seconds
     
+    risk_synced = False
+    last_news_check = datetime.now() - timedelta(minutes=10)
+    
     while True:
         try:
             now = datetime.now()
@@ -152,24 +155,23 @@ def main():
                        print(f"PnL Calc Warning: {e}") # Log but don't crash loop
 
             # One-time Sync for Risk Manager (Prevents "95% Daily Loss" on restart)
-            if 'risk_synced' not in locals():
+            if not risk_synced:
                  risk_manager.sync_start_balance(account_info['equity'])
-                 locals()['risk_synced'] = True
+                 risk_synced = True
             
             risk_manager.update_account_state(account_info['equity'])
 
             # --- NEWS RADAR (Phase 60 & Ultimate Gold Update) ---
             # Check for News Triggers every 5 minutes (to avoid IP bans)
-            if 'last_news_check' not in locals(): locals()['last_news_check'] = datetime.now() - timedelta(minutes=10)
             
             # Default to False
             if 'latest_indicators' not in locals(): latest_indicators = {}
             latest_indicators['news_event_active'] = False
             
             news_signal = None
-            if (datetime.now() - locals()['last_news_check']).total_seconds() > 300:
+            if (datetime.now() - last_news_check).total_seconds() > 300:
                 print("📡 Scanning News Radar...")
-                locals()['last_news_check'] = datetime.now()
+                last_news_check = datetime.now()
                 
                 # Check if news system is available (Handle 403 gracefully)
                 try:
