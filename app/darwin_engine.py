@@ -56,7 +56,15 @@ class ShadowStrategy(ABC):
         if self.active_trade:
             entry = self.active_trade['entry']
             direction = self.active_trade['type']
-            vol_scale = 1000 # Scaling
+            sl = self.active_trade['sl']
+            tp = self.active_trade['tp']
+            
+            # Risk exactly 1% of phantom equity
+            risk_amount = self.phantom_equity * 0.01 
+            sl_distance = abs(entry - sl)
+            if sl_distance <= 0: sl_distance = 0.0001
+            
+            vol_scale = risk_amount / sl_distance # Scaling relative to edge
             
             if direction == 'BUY':
                 floating = (current_price - entry) * vol_scale
@@ -66,9 +74,6 @@ class ShadowStrategy(ABC):
             equity_now += floating
             
             # Check Stop/Take Profit (Simulation)
-            sl = self.active_trade['sl']
-            tp = self.active_trade['tp']
-            
             closed_pnl = 0.0
             is_closed = False
             
@@ -882,9 +887,12 @@ class DarwinEngine:
         
         for strat in self.strategies:
             strat.update_performance(current_price)
+            
+            # FIX: Always generate and cache signal to make it available for Jury consensus polling
+            signal = strat.generate_signal(df, indicators, mtf_data)
+            self._cached_signals[strat.name] = signal  # Cache for reuse
+            
             if not strat.active_trade:
-                signal = strat.generate_signal(df, indicators, mtf_data)
-                self._cached_signals[strat.name] = signal  # Cache for reuse
                 if signal['action'] != 'HOLD':
                     strat.active_trade = {
                         'entry': current_price,
@@ -1091,71 +1099,6 @@ class DarwinEngine:
         # Default (No mutation implemented for this type, clone exact)
         return parent.clone()
 
-        """
-        Retrieves signal from the active leader.
-        Supports 'Allowed Strategies' filter from BIF Brain (Scout Protocol).
-        """
-        # 1. Get Restrictions
-        bif_analysis = mtf_data.get('analysis', {})
-        allowed = bif_analysis.get('allowed_strategies', ['ALL'])
-        
-        # 2. Select Strategy
-        selected_strat = self.leader # Default to Global Leader
-        
-        if 'ALL' not in allowed:
-            # We are in restricted mode (e.g. Scout Protocol)
-            # Find the highest scoring strategy that matches the allow list
-            found = False
-            for strat in self.strategies:
-                # Check match (e.g. "MeanReverter_LONG" in allowed matches "MeanRev_LONG_2.0SD")
-                # Need to be careful with naming conventions.
-                # Convention:
-                # BIF Output: "MeanReverter_LONG", "RSI_Matrix_LONG"
-                # Strat Names: "MeanRev_LONG_...", "RSI_Matrix_LONG_..."
-                
-                # Normalize for matching
-                is_match = False
-                for allow_tag in allowed:
-                    # Map BIF tag to Strat Name substring
-                    # FIX (Flaw 6): Complete tag map matching BIF tags → actual strategy name patterns
-                    # Each value is a list of substrings that ALL must appear in strat.name
-                    tag_map = {
-                        "MeanReverter_LONG": ["MeanRev_LONG"],
-                        "MeanReverter_SHORT": ["MeanRev_SHORT"],
-                        "RSI_Matrix_LONG": ["RSI_", "_LONG"],
-                        "RSI_Matrix_SHORT": ["RSI_", "_SHORT"],
-                        "TrendHawk_LONG": ["TrendHawk_LONG"],
-                        "TrendHawk_SHORT": ["TrendHawk_SHORT"],
-                        "TrendPullback_LONG": ["TrendPullback_LONG"],
-                        "TrendPullback_SHORT": ["TrendPullback_SHORT"],
-                        "MACD_Cross_LONG": ["MACD_Cross_LONG"],
-                        "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
-                        "Sniper_Elite": ["Sniper_Elite"]
-                    }
-                    search_terms = tag_map.get(allow_tag, [allow_tag])
-                    if all(term in strat.name for term in search_terms):
-                        is_match = True
-                        break
-                
-                if is_match:
-                    selected_strat = strat
-                    found = True
-                    break
-            
-            if not found:
-                return {'action': 'HOLD', 'reason': 'No strategies fit Regime Restrictions'}
-
-        # 3. Generate Signal
-        signal = selected_strat.generate_signal(df, indicators, mtf_data)
-        signal['source'] = f"Darwin::{selected_strat.name}"
-        signal['darwin_score'] = self.last_scores.get(selected_strat.name, 0)
-        
-        # 4. Inject Scout Metadata if restricted
-        if 'ALL' not in allowed:
-            signal['scout_mode'] = True
-            
-        return signal
-
     def get_consensus_signal(self, df, indicators, mtf_data, top_n=5) -> dict:
         """
         Phase 93: The Jury.
@@ -1233,7 +1176,7 @@ class DarwinEngine:
         # Logic: 20% chance to swap the lowest scoring Juror with a Rookie (0 trades)
         import random
         if random.random() < 0.25: # 25% Chance per tick
-             rookies = [s for s in candidates if s.win_streak == 0 and s.loss_streak == 0 and s.name not in [j.name for j in jury]]
+             rookies = [s for s in candidates if len(s.trade_history) == 0 and s.name not in [j.name for j in jury]]
              if rookies:
                  rookie = random.choice(rookies)
                  # Remove lowest scoring member of current jury
