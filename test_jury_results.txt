@@ -1,0 +1,6 @@
+Initializing Darwin Engine...
+Total strategies loaded: 100
+Calling DarwinEngine.get_consensus_signal()...
+
+=== CONSENSUS OUTPUT ===
+{'action': 'HOLD', 'confidence': 0.0, 'reason': 'HUNG JURY (MeanRev_SHORT_2.6SD: HOLD [Test] | RSI_Matrix_SHORT_24_84: HOLD [Test] | TrendPullback_SHORT: HOLD [Test] | TrendHawk_SHORT_49p: HOLD [Test] | TrendHawk_SHORT_74p: HOLD [Test] | TrendHawk_SHORT_66p: HOLD [Test] | TrendHawk_SHORT_87p: HOLD [Test] | TrendHawk_SHORT_41p: HOLD [Test] | RSI_Matrix_SHORT_20_80: HOLD [Test])', 'source': 'Jury::9', 'darwin_score': 0, 'scout_mode': True, 'jury_votes': {'BUY': 0, 'SELL': 0, 'HOLD': 9}, 'sl': 0, 'tp': 0}

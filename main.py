@@ -84,6 +84,12 @@ def main():
     risk_synced = False
     last_news_check = datetime.now() - timedelta(minutes=10)
     
+    # Pre-initialize states for fast-path tick execution to avoid locals() KeyError on hot start
+    latest_indicators = {}
+    fractal_levels = {}
+    gamma_state = {'near_wall': False, 'distance': 999.0, 'wall_price': 0.0, 'block_buy': False, 'block_sell': False}
+    mtf_data = {}
+    
     while True:
         try:
             now = datetime.now()
@@ -213,8 +219,8 @@ def main():
             mtf_data['analysis']['trend'] = mtf_analysis['trend'] # FIX: Inject Trend for Boost
             mtf_data['macro'] = macro_divergence # Pass Macro Data to Swarm
             
-            bif_stats = mtf_analysis['mtf_stats']['BASE']
-            alignment_score = mtf_analysis['alignment_score']
+            bif_stats = mtf_analysis.get('mtf_stats', {}).get('BASE', {'hurst': 0.5, 'entropy': 1.0})
+            alignment_score = mtf_analysis.get('alignment_score', 0.0)
             
             # Phase 83: Darwinian Evolution (Update Strategies)
             darwin.update(df, latest_indicators, mtf_data)
@@ -227,7 +233,7 @@ def main():
             # H4 -> HTF1 (M15 Mid)
             # M15 -> BASE (M5 Micro)
             
-            latest_indicators['trend_d1'] = mtf_analysis['mtf_stats']['HTF2'].get('trend', 'NEUTRAL') if 'trend' in mtf_analysis['mtf_stats']['HTF2'] else "NEUTRAL" # Fallback if trend logic varies
+            latest_indicators['trend_d1'] = mtf_analysis.get('mtf_stats', {}).get('HTF2', {}).get('trend', 'NEUTRAL') # Fallback if trend logic varies
             # Actually mtf_analysis returns 'trend' as string in 'mtf_stats'?
             # Wait, bif_brain.py analyze_mtf_regime returns 'mtf_stats': {'BASE': {'hurst':...}, ...}, "trend": "STATUS", "summary": ...
             # It DOES NOT return simple trend direction per TF in 'mtf_stats'.

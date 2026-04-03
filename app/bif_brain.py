@@ -145,9 +145,11 @@ class BIFBrain:
             scout_mode = True
             allowed_strategies = {
                 # LONG (Buy the dip — primary play)
-                "MeanReverter_LONG", "RSI_Matrix_LONG", "MACD_Cross_LONG", "TrendHawk_LONG",
+                "MeanReverter_LONG", "RSI_Matrix_LONG", "MACD_Cross_LONG", "TrendHawk_LONG", "TrendPullback_LONG",
+                "LiquiditySweeper_LONG", "NewsArbitrage_LONG", "StatArb_DXY_LONG",
                 # SHORT (Ride the pullback momentum — secondary play)
-                "TrendHawk_SHORT", "MACD_Cross_SHORT", "MeanReverter_SHORT", "RSI_Matrix_SHORT",
+                "TrendHawk_SHORT", "MACD_Cross_SHORT", "MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT",
+                "LiquiditySweeper_SHORT", "NewsArbitrage_SHORT", "StatArb_DXY_SHORT",
                 "Sniper_Elite"
             }
             trend_status = "BULLISH_PULLBACK"
@@ -161,8 +163,10 @@ class BIFBrain:
             allowed_strategies = {
                 # SHORT (Sell the rally — primary play)
                 "MeanReverter_SHORT", "RSI_Matrix_SHORT", "TrendPullback_SHORT", "MACD_Cross_SHORT",
+                "LiquiditySweeper_SHORT", "NewsArbitrage_SHORT", "StatArb_DXY_SHORT",
                 # LONG (Ride the bounce — secondary play)
-                "TrendHawk_LONG", "MACD_Cross_LONG", "MeanReverter_LONG", "RSI_Matrix_LONG",
+                "TrendHawk_LONG", "MACD_Cross_LONG", "MeanReverter_LONG", "RSI_Matrix_LONG", "TrendPullback_LONG",
+                "LiquiditySweeper_LONG", "NewsArbitrage_LONG", "StatArb_DXY_LONG",
                 "Sniper_Elite"
             }
             trend_status = "BEARISH_PULLBACK"
@@ -174,7 +178,11 @@ class BIFBrain:
              
              alignment_score = 0.5
              # Mean Reversion dominates, but TrendPullback can catch breakout retests
-             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT"}
+             allowed_strategies = {
+                 "MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", 
+                 "TrendPullback_LONG", "TrendPullback_SHORT", "LiquiditySweeper_LONG", "LiquiditySweeper_SHORT",
+                 "NewsArbitrage_LONG", "NewsArbitrage_SHORT", "StatArb_DXY_LONG", "StatArb_DXY_SHORT"
+             }
              trend_status = "RANGING"
              
              if is_fighting_trend:
@@ -187,7 +195,13 @@ class BIFBrain:
              # UPDATED: FALLBACK Mode - Allow Mean Reversion in unclear conditions
              # Markets spend 60-70% of time ranging, treat this as opportunity not threat
              alignment_score = 0.2  # Neutral-Positive (was -0.5)
-             allowed_strategies = {"MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", "TrendHawk_LONG", "TrendHawk_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT", "MACD_Cross_LONG", "MACD_Cross_SHORT", "Sniper_Elite"}
+             allowed_strategies = {
+                 "MeanReverter_LONG", "MeanReverter_SHORT", "RSI_Matrix_LONG", "RSI_Matrix_SHORT", 
+                 "TrendHawk_LONG", "TrendHawk_SHORT", "TrendPullback_LONG", "TrendPullback_SHORT", 
+                 "MACD_Cross_LONG", "MACD_Cross_SHORT", "Sniper_Elite", "LiquiditySweeper_LONG", 
+                 "LiquiditySweeper_SHORT", "NewsArbitrage_LONG", "NewsArbitrage_SHORT", 
+                 "StatArb_DXY_LONG", "StatArb_DXY_SHORT"
+             }
              trend_status = f"UNCLEAR ({base_trend}/{htf2_trend}) - Range Mode"
 
         return {

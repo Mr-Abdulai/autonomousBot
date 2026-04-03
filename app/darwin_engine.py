@@ -950,12 +950,25 @@ class DarwinEngine:
                         "TrendPullback_SHORT": ["TrendPullback_SHORT"],
                         "MACD_Cross_LONG": ["MACD_Cross_LONG"],
                         "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
-                        "Sniper_Elite": ["Sniper_Elite"]
+                        "Sniper_Elite": ["Sniper_Elite"],
+                        "LiquiditySweeper_LONG": ["LiquiditySweeper", "LONG"],
+                        "LiquiditySweeper_SHORT": ["LiquiditySweeper", "SHORT"],
+                        "NewsArbitrage_LONG": ["NewsArbitrage", "LONG"],
+                        "NewsArbitrage_SHORT": ["NewsArbitrage", "SHORT"],
+                        "StatArb_DXY_LONG": ["StatArb_DXY", "LONG"],
+                        "StatArb_DXY_SHORT": ["StatArb_DXY", "SHORT"]
                     }
                     search_terms = tag_map.get(allow_tag, [allow_tag])
                     if all(term in strat.name for term in search_terms):
                         is_match = True
                         break
+                        
+                    # ALSO ALLOW 'BOTH' direction if LONG/SHORT was requested
+                    if allow_tag.endswith("_LONG") or allow_tag.endswith("_SHORT"):
+                        both_terms = [t.replace("LONG", "BOTH").replace("SHORT", "BOTH") for t in search_terms]
+                        if all(term in strat.name for term in both_terms):
+                            is_match = True
+                            break
                 
                 if is_match:
                     selected_strat = strat
@@ -1099,7 +1112,7 @@ class DarwinEngine:
         # Default (No mutation implemented for this type, clone exact)
         return parent.clone()
 
-    def get_consensus_signal(self, df, indicators, mtf_data, top_n=5) -> dict:
+    def get_consensus_signal(self, df, indicators, mtf_data, top_n=9) -> dict:
         """
         Phase 93: The Jury.
         Instead of following 1 leader, we poll the Top N strategies.
@@ -1132,12 +1145,25 @@ class DarwinEngine:
                         "TrendPullback_SHORT": ["TrendPullback_SHORT"],
                         "MACD_Cross_LONG": ["MACD_Cross_LONG"],
                         "MACD_Cross_SHORT": ["MACD_Cross_SHORT"],
-                        "Sniper_Elite": ["Sniper_Elite"]
+                        "Sniper_Elite": ["Sniper_Elite"],
+                        "LiquiditySweeper_LONG": ["LiquiditySweeper", "LONG"],
+                        "LiquiditySweeper_SHORT": ["LiquiditySweeper", "SHORT"],
+                        "NewsArbitrage_LONG": ["NewsArbitrage", "LONG"],
+                        "NewsArbitrage_SHORT": ["NewsArbitrage", "SHORT"],
+                        "StatArb_DXY_LONG": ["StatArb_DXY", "LONG"],
+                        "StatArb_DXY_SHORT": ["StatArb_DXY", "SHORT"]
                     }
                     search_terms = tag_map.get(allow_tag, [allow_tag])
                     if all(term in strat.name for term in search_terms):
                         is_match = True
                         break
+                        
+                    # ALSO ALLOW 'BOTH' direction if LONG/SHORT was requested
+                    if allow_tag.endswith("_LONG") or allow_tag.endswith("_SHORT"):
+                        both_terms = [t.replace("LONG", "BOTH").replace("SHORT", "BOTH") for t in search_terms]
+                        if all(term in strat.name for term in both_terms):
+                            is_match = True
+                            break
                  if is_match:
                      candidates.append(strat)
         
@@ -1148,7 +1174,7 @@ class DarwinEngine:
         # UPDATED: FORCE DIVERSITY - Select cross-strategy jury
         # Pick 1 Trend + 1 Mean Reversion + 1 Momentum for balanced perspective
         jury = []
-        strategy_types = ["TrendHawk", "MeanRev", "RSI_Matrix", "MACD_Cross", "Sniper"]
+        strategy_types = ["TrendHawk", "MeanRev", "RSI_Matrix", "MACD_Cross", "Sniper", "TrendPullback", "LiquiditySweeper", "NewsArbitrage", "StatArb"]
         
         for strategy_type in strategy_types:
             for strat in candidates:
@@ -1243,10 +1269,19 @@ class DarwinEngine:
             confidence = 0.6 + (sell_votes / total_votes * 0.3)
             details = f"MAJORITY SELL {sell_votes}v{buy_votes} ({details})"
             
-        # 3. TIE / CONFLICT (2v2) -> HOLD
+        # 3. TIE / CONFLICT (2v2) -> HOLD unless one side has significantly higher confidence
         elif buy_votes == sell_votes and buy_votes >= 2:
-            final_action = "HOLD"
-            details = f"CONFLICT {buy_votes}v{sell_votes} ({details})"
+            # Tie breaker: sum of CONFIDENCE for each side
+            buy_conf_sum = sum(v['confidence'] for v in voter_signals.get('BUY', []))
+            sell_conf_sum = sum(v['confidence'] for v in voter_signals.get('SELL', []))
+            
+            if abs(buy_conf_sum - sell_conf_sum) > 0.3: # Need decisive 0.3 margin
+                final_action = "BUY" if buy_conf_sum > sell_conf_sum else "SELL"
+                confidence = 0.55 # Marginal confidence
+                details = f"TIE-BREAKER {final_action} ({buy_conf_sum:.2f}c vs {sell_conf_sum:.2f}c) | {details}"
+            else:
+                final_action = "HOLD"
+                details = f"DEADLOCK {buy_votes}v{sell_votes} ({buy_conf_sum:.2f}c vs {sell_conf_sum:.2f}c) | {details}"
 
         # 4. LONE WOLF (1 vote vs 0 opposition)
         # Scalping Mode: If 1 reliable leader sees it and others are asleep (HOLD), take it.
