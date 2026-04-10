@@ -35,6 +35,7 @@ def test_trade():
         
     price = tick.ask
     print(f"Current Ask Price: {price}")
+    symbol_info = mt5.symbol_info(symbol)
     
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
@@ -42,8 +43,8 @@ def test_trade():
         "volume": 0.01,
         "type": mt5.ORDER_TYPE_BUY,
         "price": price,
-        "sl": price * 0.99,  # 1% below ask
-        "tp": price * 1.01,  # 1% above ask
+        "sl": round(price * 0.99, symbol_info.digits),  # 1% below ask rounded
+        "tp": round(price * 1.01, symbol_info.digits),  # 1% above ask rounded
         "deviation": 20,
         "magic": 999999,
         "comment": "Test Connection",

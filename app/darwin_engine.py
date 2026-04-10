@@ -764,8 +764,9 @@ class DarwinEngine:
                         (Sniper,        "Sniper_Elite",          "BOTH",  {}),
                         (TrendPullback, "TrendPullback_LONG",    "LONG",  {}),
                         (TrendPullback, "TrendPullback_SHORT",   "SHORT", {}),
-                        (StatArb_DXY,   "StatArb_DXY_LONG",      "LONG",  {}),
-                        (StatArb_DXY,   "StatArb_DXY_SHORT",     "SHORT", {}),
+                        (LiquiditySweeper, "LiquiditySweeper_BOTH", "BOTH", {}),
+                        (NewsArbitrage, "NewsArbitrage_BOTH",    "BOTH", {}),
+                        (StatArb_DXY,   "StatArb_DXY_BOTH",      "BOTH",  {}),
                     ]
                     
                     injected = 0
@@ -1054,6 +1055,9 @@ class DarwinEngine:
             (Sniper,        "Sniper_Elite",          "BOTH",  {}),
             (TrendPullback, "TrendPullback_LONG",    "LONG",  {}),
             (TrendPullback, "TrendPullback_SHORT",   "SHORT", {}),
+            (LiquiditySweeper, "LiquiditySweeper_BOTH", "BOTH", {}),
+            (NewsArbitrage, "NewsArbitrage_BOTH",    "BOTH", {}),
+            (StatArb_DXY,   "StatArb_DXY_BOTH",      "BOTH",  {}),
         ]
         
         injected = 0
