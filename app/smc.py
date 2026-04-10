@@ -14,8 +14,9 @@ class SMCEngine:
         Identifies Fractal Swing Highs and Lows.
         Returns the dataframe with 'is_swing_high' and 'is_swing_low' columns.
         """
-        df['is_swing_high'] = False
-        df['is_swing_low'] = False
+        df = df.copy()
+        df.loc[:, 'is_swing_high'] = False
+        df.loc[:, 'is_swing_low'] = False
         
         for i in range(length, len(df) - length):
             # Swing High
