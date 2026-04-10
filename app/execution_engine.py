@@ -134,6 +134,31 @@ class ExecutionEngine:
         res = mt5.order_send(request)
         return res.retcode == mt5.TRADE_RETCODE_DONE
 
+    def _close_partial_mt5(self, ticket: int, volume_to_close: float) -> bool:
+        if self.backtest_mode: return True
+        
+        pos = mt5.positions_get(ticket=ticket)
+        if not pos: return False
+        
+        position = pos[0]
+        close_action = mt5.ORDER_TYPE_SELL if position.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+        
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "position": ticket,
+            "symbol": position.symbol,
+            "volume": volume_to_close,
+            "type": close_action,
+            "price": mt5.symbol_info_tick(position.symbol).bid if close_action == mt5.ORDER_TYPE_SELL else mt5.symbol_info_tick(position.symbol).ask,
+            "deviation": 20,
+            "magic": 123456,
+            "comment": "Partial Close TP",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        res = mt5.order_send(request)
+        return res and res.retcode == mt5.TRADE_RETCODE_DONE
+
     def monitor_open_trades(self, current_price: float, atr: float = 0.0, fractal_levels: dict = None, gamma_state: dict = None) -> dict:
         """
         Monitors ALL open trades.
@@ -178,9 +203,8 @@ class ExecutionEngine:
                         # Logic to fetch real PnL omitted for space, assuming 0 or approx
             
             # --- MANAGEMENT LOGIC (If Active) ---
-            if not is_closed and mode == "LIVE":
-                # Apply Smart Trailing (updates trade dict in place)
-                # Uses ATR for validation but purely Structural (Fractal) targets if available
+            if not is_closed:
+                # Apply Smart Trailing & Partial Profiling for BOTH Live and Mock
                 self.apply_trailing_stop(trade, current_price, atr, fractal_levels, gamma_state=gamma_state)
                 managed_count += 1 
 
@@ -241,6 +265,14 @@ class ExecutionEngine:
             if action == "BUY":
                 profit = current_price - entry_price
                 
+                # Multi-Tier Partial Profiling (1.5R)
+                if profit > (1.5 * risk) and not trade.get('partial_closed', False):
+                     close_vol = max(0.01, round(volume * 0.5, 2))
+                     if self.backtest_mode or self._close_partial_mt5(int(ticket), close_vol):
+                         trade['partial_closed'] = True
+                         trade['volume'] = volume - close_vol # Reduce remaining volume
+                         print(f"💰 PARTIAL CLOSE SECURED (+1.5R): Ticket {ticket} closed {close_vol} lots.")
+                
                 # Trigger 1: Break Even (Profit > 1.0 * Risk) - Standard Trail
                 if profit > (1.0 * risk) and current_sl < entry_price:
                     new_sl = entry_price + ts_buffer 
@@ -256,6 +288,14 @@ class ExecutionEngine:
 
             elif action == "SELL":
                 profit = entry_price - current_price
+                
+                # Multi-Tier Partial Profiling (1.5R)
+                if profit > (1.5 * risk) and not trade.get('partial_closed', False):
+                     close_vol = max(0.01, round(volume * 0.5, 2))
+                     if self.backtest_mode or self._close_partial_mt5(int(ticket), close_vol):
+                         trade['partial_closed'] = True
+                         trade['volume'] = volume - close_vol
+                         print(f"💰 PARTIAL CLOSE SECURED (+1.5R): Ticket {ticket} closed {close_vol} lots.")
                 
                 # Trigger 1: Break Even
                 if profit > (1.0 * risk) and current_sl > entry_price:

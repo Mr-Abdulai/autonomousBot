@@ -180,9 +180,7 @@ class Backtester:
         self.timeframe = timeframe
         self.sensor = MarketSensor(symbol, timeframe)
         self.darwin = DarwinEngine()
-        self.sensor = MarketSensor(symbol, timeframe)
-        self.darwin = DarwinEngine()
-        self.smc = SMCEngine() # Phase 8
+        self.smc = SMCEngine()
         self.broker = VirtualBroker(initial_capital=initial_capital, leverage=leverage)
         
     def fetch_history(self, days=30):
@@ -191,10 +189,8 @@ class Backtester:
             print("MT5 Connection Failed")
             return None
             
-        # Calculate N candles (approx)
         # M15 = 4 per hour * 24 * days = 96 * days
         count = 96 * days
-        # Fetch generous buffer
         df = self.sensor.get_market_data(n_candles=count + 500)
         print(f"✅ Loaded {len(df)} candles.")
         return df
@@ -203,28 +199,25 @@ class Backtester:
         df = self.fetch_history(days)
         if df is None or df.empty: return
         
-        # PRE-CALCULATE INDICATORS (Vectorized Speed)
         print("🧠 Pre-calculating Indicators...")
-        # MarketSensor already calculates them in get_market_data -> calculate_indicators
-        # df now has 'RSI_14', 'EMA_50', etc.
+        # MarketSensor already calculates RSI_14, EMA_50, EMA_200, ATR_14, etc.
         
-        # SIMULATION LOOP
+        # Ensure VWAP column exists for backtest (approximate using cumulative)
+        if 'VWAP' not in df.columns:
+            df['VWAP'] = (df['close'] * df['tick_volume']).cumsum() / df['tick_volume'].cumsum()
+        
         print("🚀 Starting Time Machine...")
         
-        start_index = 200 # Need warm up for EMA200
+        start_index = 200  # Warm up for EMA200
         total_steps = len(df) - start_index
         
         reports = []
+        strategy_stats = {}  # Track per-strategy performance
         
         import time
         t0 = time.time()
         
         for i in range(start_index, len(df)):
-            # Slice "Known World" up to i
-            # To simulate live, we just pass the Current Row mostly, 
-            # but strategies might need history.
-            # Darwin Strategies generally look at df.iloc[-1].
-            
             # Optimized: Pass a slice of last 500 to Darwin
             start_window = max(0, i - 500)
             current_slice = df.iloc[start_window : i+1].copy()
@@ -233,36 +226,43 @@ class Backtester:
             # 1. Update Broker (Check limits/stops on current candle High/Low)
             self.broker.update(current_candle)
             
-            # 2. Re-construct Signals Dictionary for Darwin
-            # (MarketSensor usually does this live)
+            # 2. Build indicators dict with ALL fields the Beast Mode strategies need
             indicators = {
                 "close": current_candle['close'],
-                "rsi": current_candle['RSI_14'],
-                "ema_13": current_candle['EMA_13'],   # Fast EMA for scalping
-                "ema_50": current_candle['EMA_50'],
-                "ema_200": current_candle['EMA_200'],
-                "atr": current_candle['ATR_14'],
-                "bb_upper": current_candle['BB_Upper'],
-                "bb_lower": current_candle['BB_Lower'],
-                "macd": current_candle['MACD'],
-                "macd_signal": current_candle['MACDs']
+                "rsi": current_candle.get('RSI_14', 50),
+                "RSI_14": current_candle.get('RSI_14', 50),
+                "ema_13": current_candle.get('EMA_13', 0),
+                "ema_50": current_candle.get('EMA_50', 0),
+                "EMA_50": current_candle.get('EMA_50', 0),
+                "ema_200": current_candle.get('EMA_200', 0),
+                "EMA_200": current_candle.get('EMA_200', 0),
+                "atr": current_candle.get('ATR_14', 2.0),
+                "ATR_14": current_candle.get('ATR_14', 2.0),
+                "bb_upper": current_candle.get('BB_Upper', 0),
+                "bb_lower": current_candle.get('BB_Lower', 0),
+                "macd": current_candle.get('MACD', 0),
+                "macd_signal": current_candle.get('MACDs', 0),
+                # Beast Mode additions:
+                "squeeze_on": current_candle.get('squeeze_on', False),
+                "vwap": current_candle.get('VWAP', current_candle['close']),
             }
             
-            # 3. Darwin Update
-            # Creates signals, updates virtual equity of strategies
-            # We need to mock 'mtf_data' as well (just using current TF for speed)
+            # 3. Mock MTF data (using current TF for speed, same as live fallback)
             mtf_data = {
                 'analysis': {'allowed_strategies': ['ALL']},
-                'HTF1': pd.DataFrame(), # Mock empty to avoid expensive fetches
-                'BASE': current_slice
+                'HTF1': pd.DataFrame(),  # Mock empty to avoid expensive fetches
+                'HTF2': pd.DataFrame(),  # Mock empty
+                'BASE': current_slice,
+                'macro': {}  # No DXY data in backtest
             }
             
+            # 4. Darwin Update (generates + caches signals for all strategies)
             self.darwin.update(current_slice, indicators, mtf_data)
             
-            # 4. Get Consensus/Alpha Signal
-            signal = self.darwin.get_alpha_signal(current_slice, indicators, mtf_data)
+            # 5. Get CONSENSUS signal (full jury system, not single leader)
+            signal = self.darwin.get_consensus_signal(current_slice, indicators, mtf_data)
             
-            # --- GATE 3.5: SMC FILTER (Phase 8 Backtest) ---
+            # 6. SMC Filter (Phase 8 Backtest)
             if Config.ENABLE_SMC_FILTER and signal['action'] in ['BUY', 'SELL']:
                 smc_data = self.smc.calculate_smc(current_slice)
                 valid = False
@@ -291,20 +291,25 @@ class Backtester:
                                  valid = True; break
                 
                 if not valid:
-                    # BLOCK TRADE
                     signal['action'] = 'HOLD'
-                    # print("SMC Blocked")
 
-            # 5. Execute
+            # 7. Execute
             if signal['action'] != 'HOLD':
                 self.broker.execute(signal, current_candle['close'], current_candle['time'])
                 
-            # Progress Log with Bias Check
+                # Track per-strategy stats
+                source = signal.get('source', 'Unknown')
+                if source not in strategy_stats:
+                    strategy_stats[source] = {'trades': 0, 'action': signal['action']}
+                strategy_stats[source]['trades'] += 1
+                
+            # Progress Log
             if i % 100 == 0:
                 pct = (i - start_index) / total_steps * 100
-                leader = signal.get("strategy_name", "None") or "None"
-                action = signal.get("action", "HOLD")
-                print(f"\rProgress: {pct:.1f}% | Eq: ${self.broker.equity:.0f} | Leader: {leader} ({action})", end="")
+                source = signal.get('source', 'Jury')
+                action = signal.get('action', 'HOLD')
+                open_count = len(self.broker.open_trades)
+                print(f"\rProgress: {pct:.1f}% | Eq: ${self.broker.equity:.0f} | Open: {open_count} | Last: {source} ({action})", end="", flush=True)
                 
             # Log for Charting
             reports.append({
@@ -313,7 +318,8 @@ class Backtester:
                 'drawdown': (self.broker.initial_capital - self.broker.equity) / self.broker.initial_capital if self.broker.equity < self.broker.initial_capital else 0
             })
             
-        print("\n✅ Simulation Complete.")
+        elapsed = time.time() - t0
+        print(f"\n✅ Simulation Complete. ({elapsed:.1f}s)")
         
         # RESULTS
         history = self.broker.trade_history
@@ -322,13 +328,37 @@ class Backtester:
         win_rate = (wins / len(history) * 100) if history else 0
         total_pnl = self.broker.equity - self.broker.initial_capital
         
+        # Max Drawdown
+        peak = self.broker.initial_capital
+        max_dd = 0
+        for r in reports:
+            if r['equity'] > peak:
+                peak = r['equity']
+            dd = (peak - r['equity']) / peak * 100
+            if dd > max_dd:
+                max_dd = dd
+        
         print("\n=== BACKTEST RESULTS ===")
-        print(f"Symbol: {self.symbol} | Days: {days}")
+        print(f"Symbol: {self.symbol} | Days: {days} | Time: {elapsed:.1f}s")
         print(f"Final Equity: ${self.broker.equity:.2f} ({total_pnl:+.2f})")
         print(f"Total Trades: {len(history)}")
         print(f"Win Rate: {win_rate:.1f}% ({wins}W / {losses}L)")
+        print(f"Max Drawdown: {max_dd:.1f}%")
+        
+        # Profit Factor
+        gross_wins = sum(t['profit'] for t in history if t['profit'] > 0)
+        gross_losses = abs(sum(t['profit'] for t in history if t['profit'] <= 0))
+        pf = (gross_wins / gross_losses) if gross_losses > 0 else float('inf')
+        print(f"Profit Factor: {pf:.2f}")
+        
+        # Per-Strategy Breakdown
+        if strategy_stats:
+            print("\n--- Strategy Signal Breakdown ---")
+            for strat, data in sorted(strategy_stats.items(), key=lambda x: x[1]['trades'], reverse=True):
+                print(f"  {strat}: {data['trades']} signals")
         
         # Save Report
         pd.DataFrame(reports).to_csv("backtest_equity.csv", index=False)
         pd.DataFrame(history).to_csv("backtest_trades.csv", index=False)
         print("📁 Reports saved: backtest_equity.csv, backtest_trades.csv")
+

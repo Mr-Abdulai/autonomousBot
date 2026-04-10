@@ -109,7 +109,7 @@ class ShadowStrategy(ABC):
     def get_quality_score(self, mtf_regime: dict = None) -> float:
         """
         Calculates a 'Smart Score' for leader selection.
-        Score = (Equity * RegimeBoost) / (1 + DrawdownPenalty)
+        Score = (Equity * RegimeBoost * SessionBoost) / (1 + DrawdownPenalty)
         """
         base_score = self.phantom_equity
         
@@ -122,40 +122,57 @@ class ShadowStrategy(ABC):
             regime_trend = mtf_regime.get('trend', 'NEUTRAL') # Expecting 'BULLISH', 'BEARISH', 'RANGING'
             
             # GOLD OPTIMIZED: Favor trend strategies more aggressively
-            # A. TREND STRATEGIES (TrendHawk, MACD_Cross, Sniper)
-            is_trend_strat = any(x in self.name for x in ["TrendHawk", "MACD_Cross", "Sniper"])
+            # A. TREND STRATEGIES (TrendHawk, MACD_Cross, Sniper, LondonBreakout)
+            is_trend_strat = any(x in self.name for x in ["TrendHawk", "MACD_Cross", "Sniper", "LondonBreakout"])
             if is_trend_strat:
                 if hurst > 0.55: # Trending Regime - GOLD LOVES THIS
                     # Directional Matching with HIGHER boost for Gold
                     if 'BULLISH' in regime_trend:
-                        if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x vs 1.3x forex
-                        elif self.direction == 'SHORT': boost = 0.6  # Penalize counter-trend harder
+                        if self.direction == 'LONG' or self.direction == 'BOTH': boost = 1.5
+                        elif self.direction == 'SHORT': boost = 0.6
                     elif 'BEARISH' in regime_trend:
-                        if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.5  # Gold: 1.5x
+                        if self.direction == 'SHORT' or self.direction == 'BOTH': boost = 1.5
                         elif self.direction == 'LONG': boost = 0.6
                 else: 
-                     # Not trending? Slight penalty (Gold ranges less often)
-                     boost = 0.85  # vs 0.9 for forex
+                     boost = 0.85
 
             # B. MEAN REVERSION STRATEGIES (MeanReverter, RSI_Matrix)
             elif any(x in self.name for x in ["MeanRev", "RSI_Matrix"]):
                 if hurst < 0.45: # Mean Reversion Regime
                      boost = 1.2
                 else:
-                     boost = 0.7 # Gold: Penalize MR harder in trends (vs 0.8x forex)
+                     boost = 0.7
                 
         # 2. Drawdown Penalty (Stability)
-        # 10% DD = 1.2 penalty divisor, 20% DD = 1.4
         penalty = 1 + (self.max_drawdown * 2.0) 
         
         # 3. Hot Hand Bonus (Speed of Adaptation)
-        # Accelerate promotion of strategies that are winning RIGHT NOW.
         streak_bonus = 1.0
-        if self.win_streak >= 2: streak_bonus = 1.10 # +10%
-        if self.win_streak >= 3: streak_bonus = 1.25 # +25%
-        if self.win_streak >= 5: streak_bonus = 1.50 # +50% (On Fire)
+        if self.win_streak >= 2: streak_bonus = 1.10
+        if self.win_streak >= 3: streak_bonus = 1.25
+        if self.win_streak >= 5: streak_bonus = 1.50
         
-        final_score = (base_score * boost * streak_bonus) / penalty
+        # 4. SESSION-AWARE STRATEGY WEIGHTING (U4)
+        # Gold has distinct session behaviors — weight strategies accordingly
+        from datetime import datetime, timezone
+        hour_utc = datetime.now(timezone.utc).hour
+        session_boost = 1.0
+        
+        is_trend_strat = any(x in self.name for x in ["TrendHawk", "MACD_Cross", "Sniper", "LondonBreakout", "TrendPullback"])
+        is_range_strat = any(x in self.name for x in ["MeanRev", "RSI_Matrix"])
+        
+        if 8 <= hour_utc < 16:  # London Session — Trend dominates
+            if is_trend_strat: session_boost = 1.3
+            elif is_range_strat: session_boost = 0.8
+        elif 13 <= hour_utc < 17:  # NY Overlap — Max aggression for all
+            session_boost = 1.2
+        elif 0 <= hour_utc < 8:  # Asian Session — Range strategies shine
+            if is_range_strat: session_boost = 1.3
+            elif is_trend_strat: session_boost = 0.7
+        elif 17 <= hour_utc < 24:  # Late NY — Low volume, reduce everything
+            session_boost = 0.85
+        
+        final_score = (base_score * boost * streak_bonus * session_boost) / penalty
         return final_score
 
 class TrendHawk(ShadowStrategy):
@@ -165,28 +182,23 @@ class TrendHawk(ShadowStrategy):
     """
     def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
         current_price = df.iloc[-1]['close']
+        candle_open = df.iloc[-1]['open']
         
         # Dynamic Period & Settings
         period = self.params.get('period', 20)
-        require_trend = self.params.get('require_trend', False) # OPTIMIZED: Default False to catch reversals
+        require_trend = self.params.get('require_trend', False)
         
-        # FIX 1: Robust Indicator Lookup (Handle Case Sensitivity)
-        # Sensor sends 'ema_50', we want that.
         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
         
-        # FIX 2: Correct Breakout Logic (Price > Previous N Highs)
-        # We must shift(1) to exclude the current forming candle from the reference
         prev_highs = df['high'].shift(1).rolling(period).max()
         prev_lows = df['low'].shift(1).rolling(period).min()
         
         high_x = prev_highs.iloc[-1]
         low_x = prev_lows.iloc[-1]
         
-        # Check for Insufficient Data (NaN)
         if pd.isna(high_x) or pd.isna(low_x):
              return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': "Insufficient Data for Period"}
         
-        # Trend Filter (Optional)
         is_bullish_trend = True
         is_bearish_trend = True
         
@@ -194,19 +206,17 @@ class TrendHawk(ShadowStrategy):
              is_bullish_trend = current_price > ema_50
              is_bearish_trend = current_price < ema_50
         
-        # BUY LOGIC
+        # BUY LOGIC (U6: Candle must be bullish — close > open)
         if (self.direction in ['LONG', 'BOTH']) and is_bullish_trend:
-            # Bullish Breakout
-            if current_price >= high_x:
+            if current_price >= high_x and current_price > candle_open:
                 p_sl = low_x 
                 risk = current_price - p_sl
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Zero Risk Distance'}
                 return {'action': 'BUY', 'confidence': 0.85, 'sl': p_sl, 'tp': current_price + 2*risk, 'reason': f'Breakout above {period}p High'}
                 
-        # SELL LOGIC
+        # SELL LOGIC (U6: Candle must be bearish — close < open)
         if (self.direction in ['SHORT', 'BOTH']) and is_bearish_trend:
-            # Bearish Breakout
-            if current_price <= low_x:
+            if current_price <= low_x and current_price < candle_open:
                 p_sl = high_x 
                 risk = p_sl - current_price
                 if risk <= 0: return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Zero Risk Distance'}
@@ -267,57 +277,71 @@ class MeanReverter(ShadowStrategy):
         new_name = f"MeanRev_{self.direction}_{d:.1f}SD"
         return MeanReverter(new_name, self.direction, params)
 
+from app.smc import SMCEngine
+
 class Sniper(ShadowStrategy):
     """
     3. The 'Perfectionist': Only trades if multiple Timeframes align.
     """
     def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
-         # FIX: Use Generic HTF1 key (supports H1 or M15)
-         if 'HTF1' not in mtf_data or mtf_data['HTF1'].empty:
-             return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0}
-             
-         h1_df = mtf_data['HTF1']
-         h1_close = h1_df.iloc[-1]['close']
-         h1_ma = h1_df['close'].rolling(50).mean().iloc[-1] # Simple HTF Trend (M15/H1)
-         
          current_price = df.iloc[-1]['close']
-         # FIX: Shift(1) here too
-         high_20 = df['high'].shift(1).rolling(20).max().iloc[-1]
-         low_20 = df['low'].shift(1).rolling(20).min().iloc[-1]
-         ema_50 = indicators.get('ema_50', indicators.get('EMA_50', 0))
          
-         # ... (Rest of logic similar to TrendHawk but checking HTF1)
+         # Initialize SMC Engine
+         smc_engine = SMCEngine()
+         smc_data = smc_engine.calculate_smc(df)
+         order_blocks = smc_data.get('order_blocks', [])
+         
+         if not order_blocks:
+             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"No Unmitigated Order Blocks Detected"}
+             
+         # BUG FIX B3: Check ALL unmitigated Order Blocks, not just index 0
          action = "HOLD"
          sl = 0
          tp = 0
+         matched_ob = None
          
-         if current_price > ema_50 and current_price >= high_20:
-             action = "BUY"
-             sl = low_20
-             tp = current_price + 2*(current_price - sl)
-         elif current_price < ema_50 and current_price <= low_20:
-             action = "SELL"
-             sl = high_20
-             tp = current_price - 2*(sl - current_price)
+         for ob in order_blocks:
+             ob_type = ob['type']
+             ob_top = ob['price_top']
+             ob_bottom = ob['price_bottom']
              
-         # MATCH DASHBOARD LOGIC (EMA 13/50 Cross)
-         h1_ema13 = h1_df['close'].ewm(span=13, adjust=False).mean().iloc[-1]
-         h1_ema50 = h1_df['close'].ewm(span=50, adjust=False).mean().iloc[-1]
-         
-         is_h1_bullish = h1_ema13 > h1_ema50
-         is_h1_bearish = h1_ema13 < h1_ema50
-              
-         if action == 'BUY':
-             if is_h1_bullish:
-                 return {'action': 'BUY', 'confidence': 0.95, 'sl': sl, 'tp': tp}
-         elif action == 'SELL':
-             if is_h1_bearish:
-                 return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp}
-        
-         if action == "HOLD":
-             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"No {self.name} PA Setup ({current_price:.5f} vs H:{high_20:.5f}/L:{low_20:.5f})"}
+             if ob_type == "BULLISH_OB":
+                 if current_price <= (ob_top * 1.001) and current_price >= ob_bottom:
+                     action = "BUY"
+                     sl = ob_bottom * 0.998
+                     tp = current_price + 3*(current_price - sl)
+                     matched_ob = ob
+                     break
+             elif ob_type == "BEARISH_OB":
+                 if current_price >= (ob_bottom * 0.999) and current_price <= ob_top:
+                     action = "SELL"
+                     sl = ob_top * 1.002
+                     tp = current_price - 3*(sl - current_price)
+                     matched_ob = ob
+                     break
                  
-         return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF1 Alignment Fail (Base={action}, HTF1_EMA13={h1_ema13:.5f}/EMA50={h1_ema50:.5f})"}
+         if action == "HOLD":
+             nearest_ob = order_blocks[0]
+             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"No Sniper_Elite PA Setup ({current_price:.5f} vs H:{nearest_ob['price_top']:.5f}/L:{nearest_ob['price_bottom']:.5f})"}
+                 
+         # MATCH HTF Trend alignment — check HTF2 (H4) or HTF1 (H1)
+         htf_aligned = True
+         for tf_key in ['HTF2', 'HTF1']:
+             if tf_key in mtf_data and hasattr(mtf_data[tf_key], 'empty') and not mtf_data[tf_key].empty:
+                 htf_df = mtf_data[tf_key]
+                 htf_close = htf_df.iloc[-1]['close']
+                 htf_ema50 = htf_df['close'].ewm(span=50, adjust=False).mean().iloc[-1]
+                 
+                 if action == 'BUY' and htf_close < htf_ema50:
+                     htf_aligned = False
+                 if action == 'SELL' and htf_close > htf_ema50:
+                     htf_aligned = False
+                 break  # Use the first available HTF
+         
+         if not htf_aligned:
+             return {'action': 'HOLD', 'confidence': 0.0, 'sl': 0, 'tp': 0, 'reason': f"HTF Alignment Fail - {action} blocked by HTF"}
+
+         return {'action': action, 'confidence': 0.98, 'sl': sl, 'tp': tp, 'reason': f"SMC {matched_ob['type']} Mitigation"}
 
     def clone(self, new_params: dict = None) -> 'Sniper':
         return Sniper(self.name, self.direction)
@@ -338,10 +362,30 @@ class RSI_Matrix(ShadowStrategy):
         # FIX: Robust Key Lookup (Sensor uses 'rsi', legacy uses 'RSI_14')
         rsi = indicators.get('rsi', indicators.get('RSI_14', 50))
         
-        # OPTIMIZED: Regime Filter (Don't fade strong trends)
+        # BUG FIX B1: Dynamic RSI Boundaries using Bollinger Bands logic
+        # Previously checked for nonexistent 'rsi_history' column — dead code.
+        # Now computes directly from df['RSI_14'] which MarketSensor always provides.
+        if 'RSI_14' in df.columns and len(df) >= 20:
+            recent_rsi = df['RSI_14'].tail(20).dropna()
+            if len(recent_rsi) >= 10:
+                rsi_mean = recent_rsi.mean()
+                rsi_std = recent_rsi.std()
+                if rsi_std > 0:
+                    dynamic_upper = min(90, max(65, rsi_mean + (2.0 * rsi_std)))
+                    dynamic_lower = max(10, min(35, rsi_mean - (2.0 * rsi_std)))
+                else:
+                    dynamic_upper = self.upper
+                    dynamic_lower = self.lower
+            else:
+                dynamic_upper = self.upper
+                dynamic_lower = self.lower
+        else:
+            dynamic_upper = self.upper
+            dynamic_lower = self.lower
+            
+        # Regime Filter (Don't fade strong trends)
         hurst = 0.5
         try:
-             # Extract Hurst from mtf_data['analysis']['M15']['hurst'] if available
              hurst = mtf_data.get('analysis', {}).get('M15', {}).get('hurst', 0.5)
         except:
              pass
@@ -349,12 +393,12 @@ class RSI_Matrix(ShadowStrategy):
         if hurst > 0.6:
              return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f"Hurst {hurst:.2f} (Trending) - Unsafe for MeanRev"}
         
-        # Logic: Buy Low, Sell High
-        if rsi < self.lower:
-            return {'action': 'BUY', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*0.995, 'tp': df.iloc[-1]['close']*1.01, 'reason': f'RSI Oversold ({rsi:.1f} < {self.lower})'}
+        # Logic: Buy Low, Sell High using Dynamic Volatility Bands
+        if rsi < dynamic_lower:
+            return {'action': 'BUY', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*0.995, 'tp': df.iloc[-1]['close']*1.01, 'reason': f'Dynamic RSI Oversold ({rsi:.1f} < {dynamic_lower:.1f})'}
             
-        if rsi > self.upper:
-             return {'action': 'SELL', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*1.005, 'tp': df.iloc[-1]['close']*0.99, 'reason': f'RSI Overbought ({rsi:.1f} > {self.upper})'}
+        if rsi > dynamic_upper:
+             return {'action': 'SELL', 'confidence': 0.8, 'sl': df.iloc[-1]['close']*1.005, 'tp': df.iloc[-1]['close']*0.99, 'reason': f'Dynamic RSI Overbought ({rsi:.1f} > {dynamic_upper:.1f})'}
                 
         return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f'RSI Neutral ({rsi:.1f})'}
 
@@ -479,33 +523,37 @@ class LiquiditySweeper(ShadowStrategy):
         
         # 1. BEARISH SWEEP (Short Opportunity)
         # Prev candle spiked ABOVE the high (triggering buy stops), but closed weakly (rejection).
-        # Current candle confirms by moving lower.
+        # We now mathematically measure the sweep wick.
+        upper_wick = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+        
         is_bearish_sweep = (
             prev_candle['high'] > recent_high and        # Pierced the recent high
-            prev_candle['close'] < (recent_high + atr*0.2) and # Rejected to close near/below the high
-            (prev_candle['open'] > prev_candle['close']) and   # Bearish close on the spike candle
+            upper_wick > (atr * 0.4) and                 # Serious liquidity trap (Wick size is structurally huge)
+            prev_candle['close'] < (recent_high + atr*0.1) and # Rejected to close near/below the high
             current_candle['close'] < prev_candle['low']       # Current candle confirms downside
         )
         
         if is_bearish_sweep and self.direction in ['BOTH', 'SHORT']:
-            sl = prev_candle['high'] + (atr * 0.5) # Tight SL just above the sweep wick
+            sl = prev_candle['high'] + (atr * 0.2) # Tight SL just above the sweep wick
             tp = current_candle['close'] - (abs(sl - current_candle['close']) * 3.0) # 1:3 R:R
-            return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt High)"}
+            return {'action': 'SELL', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt High - Massive Wick)"}
             
         # 2. BULLISH SWEEP (Long Opportunity)
+        lower_wick = min(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+        
         is_bullish_sweep = (
             prev_candle['low'] < recent_low and         # Pierced the recent low
-            prev_candle['close'] > (recent_low - atr*0.2) and # Rejected to close near/above the low
-            (prev_candle['close'] > prev_candle['open']) and  # Bullish close on the spike candle
+            lower_wick > (atr * 0.4) and                # Serious liquidity trap
+            prev_candle['close'] > (recent_low - atr*0.1) and # Rejected to close near/above the low
             current_candle['close'] > prev_candle['high']     # Current candle confirms upside
         )
         
         if is_bullish_sweep and self.direction in ['BOTH', 'LONG']:
-            sl = prev_candle['low'] - (atr * 0.5) # Tight SL below the sweep wick
+            sl = prev_candle['low'] - (atr * 0.2) # Tight SL below the sweep wick
             tp = current_candle['close'] + (abs(current_candle['close'] - sl) * 3.0) # 1:3 R:R
-            return {'action': 'BUY', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt Low)"}
+            return {'action': 'BUY', 'confidence': 0.95, 'sl': sl, 'tp': tp, 'reason': "Liquidity Sweep (Stop Hunt Low - Massive Wick)"}
             
-        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Sweep Pattern'}
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No Valid Sweep Pattern'}
 
     def clone(self, new_params: dict = None) -> 'LiquiditySweeper':
         return LiquiditySweeper(self.name, self.direction)
@@ -598,6 +646,118 @@ class StatArb_DXY(ShadowStrategy):
     def clone(self, new_params: dict = None) -> 'StatArb_DXY':
         return StatArb_DXY(self.name, self.direction)
 
+class LondonBreakout(ShadowStrategy):
+    """
+    U2: London Session Breakout Strategy.
+    Gold's #1 institutional intraday pattern: price establishes a range during the
+    Asian session (00:00–08:00 UTC), then breaks out at the London open.
+    Fires once per day between 08:00-10:00 UTC.
+    """
+    def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
+        from datetime import timezone
+        
+        current_price = df.iloc[-1]['close']
+        current_time = df.iloc[-1]['time']
+        
+        # Handle timezone-aware or naive datetimes
+        if hasattr(current_time, 'hour'):
+            hour_utc = current_time.hour
+        else:
+            hour_utc = pd.Timestamp(current_time).hour
+        
+        # Only active during London open window (08:00-10:00 UTC)
+        if hour_utc < 8 or hour_utc >= 10:
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Outside London Breakout Window'}
+        
+        # Calculate Asian Session Range (00:00-08:00 UTC candles)
+        # Filter candles from today's Asian session
+        asian_candles = df[df['time'].apply(lambda t: t.hour if hasattr(t, 'hour') else pd.Timestamp(t).hour) < 8]
+        asian_today = asian_candles.tail(32)  # ~8 hours of M15 candles
+        
+        if len(asian_today) < 8:
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Insufficient Asian Session Data'}
+        
+        asian_high = asian_today['high'].max()
+        asian_low = asian_today['low'].min()
+        asian_range = asian_high - asian_low
+        
+        # Skip if range is too tight (squeeze) or too wide (already moved)
+        atr = indicators.get('atr', indicators.get('ATR_14', 2.0))
+        if asian_range < atr * 0.3:
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f'Asian Range Too Tight ({asian_range:.2f})'}
+        if asian_range > atr * 3.0:
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f'Asian Range Too Wide ({asian_range:.2f})'}
+        
+        candle_open = df.iloc[-1]['open']
+        
+        # Bullish Breakout: Close above Asian High with bullish candle
+        if current_price > asian_high and current_price > candle_open:
+            sl = asian_low
+            tp = current_price + (asian_range * 2.0)  # 2× the Asian range
+            return {'action': 'BUY', 'confidence': 0.90, 'sl': sl, 'tp': tp, 'reason': f'London Breakout BUY (Range: {asian_range:.2f})'}
+        
+        # Bearish Breakout: Close below Asian Low with bearish candle
+        if current_price < asian_low and current_price < candle_open:
+            sl = asian_high
+            tp = current_price - (asian_range * 2.0)
+            return {'action': 'SELL', 'confidence': 0.90, 'sl': sl, 'tp': tp, 'reason': f'London Breakout SELL (Range: {asian_range:.2f})'}
+        
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': f'No London Breakout ({current_price:.2f} inside {asian_low:.2f}-{asian_high:.2f})'}
+    
+    def clone(self, new_params: dict = None) -> 'LondonBreakout':
+        return LondonBreakout(self.name, self.direction)
+
+class FVGRetracement(ShadowStrategy):
+    """
+    U3: Fair Value Gap Retracement Strategy.
+    Trades the gap fill when price returns to an unmitigated FVG zone.
+    FVGs form 5-10× more frequently than Order Blocks, providing significantly
+    more high-probability SMC entry points.
+    """
+    def _generate_raw_signal(self, df: pd.DataFrame, indicators: dict, mtf_data: dict) -> dict:
+        current_price = df.iloc[-1]['close']
+        candle_open = df.iloc[-1]['open']
+        
+        smc_engine = SMCEngine()
+        fvgs = smc_engine.detect_fvgs(df)
+        
+        if not fvgs:
+            return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'No FVGs Detected'}
+        
+        atr = indicators.get('atr', indicators.get('ATR_14', 2.0))
+        
+        # Check recent FVGs (last 5) for price re-entry
+        for fvg in reversed(fvgs[-5:]):
+            fvg_top = fvg['top']
+            fvg_bottom = fvg['bottom']
+            fvg_mid = (fvg_top + fvg_bottom) / 2
+            fvg_size = fvg_top - fvg_bottom
+            
+            # Skip insignificant FVGs (smaller than 0.2 ATR)
+            if fvg_size < atr * 0.2:
+                continue
+            
+            if fvg['type'] == 'BULLISH_FVG':
+                # Price has dropped back into the Bullish FVG — BUY the fill
+                if fvg_bottom <= current_price <= fvg_top and current_price > candle_open:
+                    sl = fvg_bottom - (atr * 0.5)
+                    risk = current_price - sl
+                    tp = current_price + (risk * 2.0)  # 1:2 R:R
+                    return {'action': 'BUY', 'confidence': 0.82, 'sl': sl, 'tp': tp, 'reason': f'FVG Retracement BUY ({fvg_bottom:.2f}-{fvg_top:.2f})'}
+            
+            elif fvg['type'] == 'BEARISH_FVG':
+                # Price has pushed back up into the Bearish FVG — SELL the fill
+                if fvg_bottom <= current_price <= fvg_top and current_price < candle_open:
+                    sl = fvg_top + (atr * 0.5)
+                    risk = sl - current_price
+                    tp = current_price - (risk * 2.0)
+                    return {'action': 'SELL', 'confidence': 0.82, 'sl': sl, 'tp': tp, 'reason': f'FVG Retracement SELL ({fvg_bottom:.2f}-{fvg_top:.2f})'}
+        
+        return {'action': 'HOLD', 'confidence': 0, 'sl': 0, 'tp': 0, 'reason': 'Price Not in Any FVG Zone'}
+    
+    def clone(self, new_params: dict = None) -> 'FVGRetracement':
+        return FVGRetracement(self.name, self.direction)
+
 class DarwinEngine:
     def __init__(self):
         self.strategies = []
@@ -662,6 +822,16 @@ class DarwinEngine:
         self.strategies.append(StatArb_DXY("StatArb_DXY_SHORT", direction="SHORT"))
         self.strategies.append(StatArb_DXY("StatArb_DXY_BOTH", direction="BOTH"))
         
+        # 10. BEAST MODE: London Breakout (U2) — Gold's #1 institutional pattern
+        self.strategies.append(LondonBreakout("LondonBreakout_LONG", direction="LONG"))
+        self.strategies.append(LondonBreakout("LondonBreakout_SHORT", direction="SHORT"))
+        self.strategies.append(LondonBreakout("LondonBreakout_BOTH", direction="BOTH"))
+        
+        # 11. BEAST MODE: FVG Retracement (U3) — Trade gap fills for high-frequency SMC entries
+        self.strategies.append(FVGRetracement("FVGRetracement_LONG", direction="LONG"))
+        self.strategies.append(FVGRetracement("FVGRetracement_SHORT", direction="SHORT"))
+        self.strategies.append(FVGRetracement("FVGRetracement_BOTH", direction="BOTH"))
+        
         print(f"🐝 Darwin Swarm Initialized: {len(self.strategies)} Active Strategies.")
         
         # LOAD BRAIN MEMORY
@@ -682,7 +852,9 @@ class DarwinEngine:
             'TrendPullback': TrendPullback,
             'LiquiditySweeper': LiquiditySweeper,
             'NewsArbitrage': NewsArbitrage,
-            'StatArb_DXY': StatArb_DXY
+            'StatArb_DXY': StatArb_DXY,
+            'LondonBreakout': LondonBreakout,
+            'FVGRetracement': FVGRetracement
         }
         return mapping.get(class_name)
         
@@ -767,6 +939,8 @@ class DarwinEngine:
                         (LiquiditySweeper, "LiquiditySweeper_BOTH", "BOTH", {}),
                         (NewsArbitrage, "NewsArbitrage_BOTH",    "BOTH", {}),
                         (StatArb_DXY,   "StatArb_DXY_BOTH",      "BOTH",  {}),
+                        (LondonBreakout, "LondonBreakout_BOTH",  "BOTH",  {}),
+                        (FVGRetracement, "FVGRetracement_BOTH",  "BOTH",  {}),
                     ]
                     
                     injected = 0
@@ -957,7 +1131,11 @@ class DarwinEngine:
                         "NewsArbitrage_LONG": ["NewsArbitrage", "LONG"],
                         "NewsArbitrage_SHORT": ["NewsArbitrage", "SHORT"],
                         "StatArb_DXY_LONG": ["StatArb_DXY", "LONG"],
-                        "StatArb_DXY_SHORT": ["StatArb_DXY", "SHORT"]
+                        "StatArb_DXY_SHORT": ["StatArb_DXY", "SHORT"],
+                        "LondonBreakout_LONG": ["LondonBreakout", "LONG"],
+                        "LondonBreakout_SHORT": ["LondonBreakout", "SHORT"],
+                        "FVGRetracement_LONG": ["FVGRetracement", "LONG"],
+                        "FVGRetracement_SHORT": ["FVGRetracement", "SHORT"]
                     }
                     search_terms = tag_map.get(allow_tag, [allow_tag])
                     if all(term in strat.name for term in search_terms):
@@ -1058,6 +1236,8 @@ class DarwinEngine:
             (LiquiditySweeper, "LiquiditySweeper_BOTH", "BOTH", {}),
             (NewsArbitrage, "NewsArbitrage_BOTH",    "BOTH", {}),
             (StatArb_DXY,   "StatArb_DXY_BOTH",      "BOTH",  {}),
+            (LondonBreakout, "LondonBreakout_BOTH",  "BOTH",  {}),
+            (FVGRetracement, "FVGRetracement_BOTH",  "BOTH",  {}),
         ]
         
         injected = 0
@@ -1217,23 +1397,26 @@ class DarwinEngine:
                      jury.append(rookie)
                      print(f"🕵️ SCOUT PROTOCOL: Swapped {removed.name} for Rookie {rookie.name}")
         
-        votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
+        # U1: WEIGHTED JURY VOTING — each vote weighted by quality_score
+        vote_weights = {'BUY': 0.0, 'SELL': 0.0, 'HOLD': 0.0}
+        vote_counts = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
         reasons = []
-        # FIX: Collect SL/TP from voters so consensus preserves strategy precision
         voter_signals = {'BUY': [], 'SELL': []}
         
         print(f"⚖️ THE JURY IS IN SESSION. Members: {[s.name for s in jury]}")
         
         for juror in jury:
-            # FIX (Flaw 8): Reuse cached signal from update() if available
             sig = getattr(self, '_cached_signals', {}).get(juror.name) or juror.generate_signal(df, indicators, mtf_data)
             action = sig['action']
-            votes[action] = votes.get(action, 0) + 1
-            # ENHANCED LOGGING: Show the reason!
+            
+            # Weight = quality score of this juror (proven performers count more)
+            weight = self.last_scores.get(juror.name, 10000.0)
+            vote_weights[action] = vote_weights.get(action, 0) + weight
+            vote_counts[action] = vote_counts.get(action, 0) + 1
+            
             reason_stub = sig.get('reason', 'No Signal')
             reasons.append(f"{juror.name}: {action} [{reason_stub}]")
             
-            # Capture SL/TP from directional voters
             if action in ['BUY', 'SELL'] and sig.get('sl', 0) != 0:
                 voter_signals[action].append({
                     'name': juror.name,
@@ -1242,15 +1425,17 @@ class DarwinEngine:
                     'confidence': sig.get('confidence', 0.5)
                 })
             
-        # Decision Logic
+        # Decision Logic (Weighted)
         final_action = "HOLD"
         confidence = 0.0
         details = " | ".join(reasons)
         
-        # Check Unanimous
-        # Updated Consensus Logic for Top 5
-        buy_votes = votes['BUY']
-        sell_votes = votes['SELL']
+        buy_votes = vote_counts['BUY']
+        sell_votes = vote_counts['SELL']
+        buy_weight = vote_weights['BUY']
+        sell_weight = vote_weights['SELL']
+        hold_weight = vote_weights['HOLD']
+        total_weight = buy_weight + sell_weight + hold_weight
         total_votes = len(jury)
         
         # 1. UNANIMOUS (Strongest)
@@ -1263,46 +1448,68 @@ class DarwinEngine:
             confidence = 1.0
             details = f"UNANIMOUS SELL ({details})"
             
-        # 2. MAJORITY (More votes than opposition AND at least 2)
-        elif buy_votes > sell_votes and buy_votes >= 2:
+        # 2. WEIGHTED MAJORITY: Side with more weight wins (must have 2+ votes)
+        elif buy_votes >= 2 and buy_weight > sell_weight and buy_weight > hold_weight:
             final_action = "BUY"
-            confidence = 0.6 + (buy_votes / total_votes * 0.3)
-            details = f"MAJORITY BUY {buy_votes}v{sell_votes} ({details})"
-        elif sell_votes > buy_votes and sell_votes >= 2:
+            confidence = 0.6 + (buy_weight / total_weight * 0.35) if total_weight > 0 else 0.6
+            details = f"WEIGHTED BUY {buy_votes}v{sell_votes} (W:{buy_weight:.0f} vs {sell_weight:.0f}) ({details})"
+        elif sell_votes >= 2 and sell_weight > buy_weight and sell_weight > hold_weight:
             final_action = "SELL"
-            confidence = 0.6 + (sell_votes / total_votes * 0.3)
-            details = f"MAJORITY SELL {sell_votes}v{buy_votes} ({details})"
+            confidence = 0.6 + (sell_weight / total_weight * 0.35) if total_weight > 0 else 0.6
+            details = f"WEIGHTED SELL {sell_votes}v{buy_votes} (W:{sell_weight:.0f} vs {buy_weight:.0f}) ({details})"
             
-        # 3. TIE / CONFLICT (2v2) -> HOLD unless one side has significantly higher confidence
-        elif buy_votes == sell_votes and buy_votes >= 2:
-            # Tie breaker: sum of CONFIDENCE for each side
-            buy_conf_sum = sum(v['confidence'] for v in voter_signals.get('BUY', []))
-            sell_conf_sum = sum(v['confidence'] for v in voter_signals.get('SELL', []))
+        # 3. STRONG MINORITY: Even 1 high-scoring voter can win if their weight
+        #    exceeds combined opposing weight (elite strategist override)
+        elif buy_votes >= 1 and sell_votes == 0 and buy_weight > hold_weight * 0.4:
+            final_action = "BUY"
+            confidence = 0.55 + (buy_weight / total_weight * 0.2) if total_weight > 0 else 0.55
+            details = f"WEIGHTED LONE WOLF BUY (W:{buy_weight:.0f} vs HOLD:{hold_weight:.0f}) ({details})"
+        elif sell_votes >= 1 and buy_votes == 0 and sell_weight > hold_weight * 0.4:
+            final_action = "SELL"
+            confidence = 0.55 + (sell_weight / total_weight * 0.2) if total_weight > 0 else 0.55
+            details = f"WEIGHTED LONE WOLF SELL (W:{sell_weight:.0f} vs HOLD:{hold_weight:.0f}) ({details})"
             
-            if abs(buy_conf_sum - sell_conf_sum) > 0.3: # Need decisive 0.3 margin
-                final_action = "BUY" if buy_conf_sum > sell_conf_sum else "SELL"
-                confidence = 0.55 # Marginal confidence
-                details = f"TIE-BREAKER {final_action} ({buy_conf_sum:.2f}c vs {sell_conf_sum:.2f}c) | {details}"
+        # 4. CONFLICT (both sides have votes) — weight decides
+        elif buy_votes >= 1 and sell_votes >= 1:
+            if buy_weight > sell_weight * 1.3:  # Need 30% weight margin
+                final_action = "BUY"
+                confidence = 0.55
+                details = f"CONFLICT RESOLVED BUY (W:{buy_weight:.0f} vs {sell_weight:.0f}) | {details}"
+            elif sell_weight > buy_weight * 1.3:
+                final_action = "SELL"
+                confidence = 0.55
+                details = f"CONFLICT RESOLVED SELL (W:{sell_weight:.0f} vs {buy_weight:.0f}) | {details}"
             else:
                 final_action = "HOLD"
-                details = f"DEADLOCK {buy_votes}v{sell_votes} ({buy_conf_sum:.2f}c vs {sell_conf_sum:.2f}c) | {details}"
+                details = f"DEADLOCK (BUY_W:{buy_weight:.0f} vs SELL_W:{sell_weight:.0f}) | {details}"
 
-        # 4. LONE WOLF (1 vote vs 0 opposition)
-        # Scalping Mode: If 1 reliable leader sees it and others are asleep (HOLD), take it.
-        # But if 1 says BUY and 1 says SELL, it's a conflict.
-        elif buy_votes == 1 and sell_votes == 0:
-            final_action = "BUY"
-            confidence = 0.55
-            details = f"LONE WOLF BUY ({details})"
-        elif sell_votes == 1 and buy_votes == 0:
-            final_action = "SELL"
-            confidence = 0.55
-            details = f"LONE WOLF SELL ({details})"
-            
         else:
              final_action = "HOLD"
              details = f"HUNG JURY ({details})"
              
+        # =========================================================
+        # INSTITUTIONAL MACRO VETO (The DXY Defense)
+        # =========================================================
+        # If DXY (US Dollar Index) is strongly trending, it overrides technicals.
+        macro = mtf_data.get('macro', {})
+        dxy_active = macro.get('dxy_active', False)
+        div_score = macro.get('divergence_score', 0.0)
+        
+        if final_action != "HOLD" and dxy_active:
+             # If divergence_score > +0.6, Dollar is violently pumping. Gold should drop.
+             # Veto BUYS.
+             if final_action == "BUY" and div_score > 0.6:
+                 final_action = "HOLD"
+                 confidence = 0.0
+                 details = f"VETOED (MACRO): BUY blocked. DXY is Pumping violently (Score +{div_score:.2f}) | {details}"
+             
+             # If divergence_score < -0.6, Dollar is collapsing. Gold should rally.
+             # Veto SELLS.
+             elif final_action == "SELL" and div_score < -0.6:
+                 final_action = "HOLD"
+                 confidence = 0.0
+                 details = f"VETOED (MACRO): SELL blocked. DXY is Collapsing (Score {div_score:.2f}) | {details}"
+                 
         # Inject Scout Metadata logic (reused)
         scout_mode = False
         if 'ALL' not in allowed:
@@ -1325,7 +1532,7 @@ class DarwinEngine:
             'source': f"Jury::{len(jury)}",
             'darwin_score': self.last_scores.get(self.leader.name, 0),
             'scout_mode': scout_mode,
-            'jury_votes': votes,
+            'jury_votes': vote_counts,
             'sl': best_sl,
             'tp': best_tp
         }

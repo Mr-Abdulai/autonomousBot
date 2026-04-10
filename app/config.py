@@ -36,6 +36,9 @@ class Config:
     ENABLE_DYNAMIC_RISK = True # Scales risk based on PnL
     MAX_DAILY_LOSS = 0.05 # 5% Max Daily Loss (Circuit Breaker)
     
+    # Phase 90: SMC Filter
+    ENABLE_SMC_FILTER = True # Enforces Institutional Order Block filters on signals
+    
     # Credentials
     MT5_LOGIN = os.getenv("MT5_LOGIN")
     MT5_PASSWORD = os.getenv("MT5_PASSWORD")

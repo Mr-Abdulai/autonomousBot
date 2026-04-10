@@ -483,14 +483,15 @@ Current Leader: {darwin.leader.name}
                     # Pass Confidence to Decision
                     decision['confidence_score'] = conf
                     
-                    # --- IMPROVEMENT 2A: ENERGY STATE GUARD (Volatility Squeeze) ---
-                    # Only apply to momentum-hungry bots
+                    # --- BUG FIX B2: ENERGY STATE GUARD (Volatility Squeeze) ---
+                    # Block momentum signals during LOW energy (squeeze ON = coiling, no move)
+                    # Allow momentum signals during HIGH energy (squeeze OFF = expansion, big move)
                     source_reason = str(darwin_signal.get('reason', ''))
                     if "MACD" in source_reason or "TrendHawk" in source_reason:
                          is_squeezing = latest_indicators.get('squeeze_on', False)
-                         if not is_squeezing:
-                             print(f"DEBUG: ⛔ Energy State Guard blocked {darwin_signal['action']}. Volatility is ALREADY EXPANDED (No Squeeze).", flush=True)
-                             decision['reasoning_summary'] = "VETO: Volatility Expanded. Missed origin of impulse."
+                         if is_squeezing:
+                             print(f"DEBUG: ⛔ Energy State Guard blocked {darwin_signal['action']}. Market is COILING (Squeeze ON). Waiting for expansion.", flush=True)
+                             decision['reasoning_summary'] = "VETO: Market Squeezing. Waiting for breakout energy."
                              run_ai = False
 
 
@@ -502,22 +503,23 @@ Current Leader: {darwin.leader.name}
                 decision['reasoning_summary'] = f"Max Trades Reached ({len(active_trades)}/{Config.MAX_OPEN_TRADES}). Waiting for exit."
             
             # Gate 4: Project Chronos (The Oracle of Time)
-            if run_ai:
+            # U5: HIGH-CONVICTION FAST LANE — skip Chronos if jury consensus is overwhelming
+            conf = darwin_signal.get('confidence', 0.0) if run_ai else 0.0
+            if run_ai and conf >= 0.90:
+                print(f"DEBUG: 🚨 FAST LANE ACTIVATED (Confidence {conf:.2f} >= 0.90). Skipping Chronos.", flush=True)
+                # No Chronos simulation needed — swarm consensus IS the validation
+            elif run_ai:
                 print("DEBUG: Entering Gate 4 (Chronos Simulation)...", flush=True)
-                # 1. Initialize Weaver with Deep History
                 weaver = ChronosWeaver(df_deep)
                 
-                # 2. Generate Futures (100 Paths, 10 Period Horizon)
-                # Use current ATR for volatility estimation
                 atr_val = latest_indicators.get('atr', latest_indicators.get('ATR_14', 0.0))
-                # SAFEGUARD: Prevent Division by Zero
                 safe_price = current_price if current_price > 0 else 1.0
                 current_vol = atr_val / safe_price
                 
                 features = {'price': current_price, 'atr': atr_val, 'volatility': current_vol}
                 
-                # Hybrid: Use Bootstrap if possible, else Monte Carlo
-                futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=48) # 4 Hours (was 12/1h)
+                # U8: Reduced horizon from 48 to 16 (4 hours on M15 — matches Gold's intraday moves)
+                futures = weaver.generate_historical_echoes(features, n_futures=50, horizon=16)
                 
                 # 3. Simulate The Jury's Call
                 # FIX: Use Darwin's SL/TP if available, else fallback to ATR
